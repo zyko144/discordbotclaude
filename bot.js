@@ -303,16 +303,24 @@ client.once('ready', async () => {
             }).catch(()=>{});
           }
 
-          // Si c'est le salon cadeaux, envoyer le PDF si pas déjà envoyé
+          // Si c'est le salon cadeaux, envoyer les PDFs si pas déjà envoyés
           if (ch && chName === '🎁-cadeaux-boosters') {
             try {
               const messages = await ch.messages.fetch({ limit: 10 });
-              const hasPdf = messages.some(m => m.attachments.size > 0 && m.attachments.first().name.endsWith('.pdf'));
-              if (!hasPdf && require('fs').existsSync('./50_prompts_ia.pdf')) {
-                 await ch.send({
-                   content: "🎉 **Merci infiniment pour votre Boost !** 🎉\n\nPour vous remercier de soutenir financièrement le serveur, voici un cadeau exclusif : **50 Prompts IA Avancés** pour dominer ChatGPT, Claude et Gemini.\n\n*(Nouveau : Vous avez aussi accès au salon `#🤖-ia-prioritaire-boosters` !)*",
-                   files: ['./50_prompts_ia.pdf']
-                 });
+              // On vérifie si la formation a déjà été envoyée
+              const hasFormation = messages.some(m => m.attachments.size > 0 && m.attachments.some(a => a.name === 'Formation_Masterclass_IA.pdf'));
+              
+              if (!hasFormation) {
+                 const filesToSend = [];
+                 if (require('fs').existsSync('./50_prompts_ia.pdf')) filesToSend.push('./50_prompts_ia.pdf');
+                 if (require('fs').existsSync('./Formation_Masterclass_IA.pdf')) filesToSend.push('./Formation_Masterclass_IA.pdf');
+                 
+                 if (filesToSend.length > 0) {
+                   await ch.send({
+                     content: "🎉 **CADEAUX EXCLUSIFS DE BOOST !** 🎉\n\nPour vous remercier de soutenir financièrement le serveur, voici vos récompenses :\n\n📚 **1. La Masterclass IA (Formation Complète)** : Découvrez comment fonctionnent les différentes IA, les secrets du Prompt Engineering, et les astuces de génération d'images.\n🔥 **2. Les 50 Méga-Prompts** : Un recueil de prompts avancés pour des projets complexes.\n\n*(Nouveau : Vous avez aussi accès au salon `#🤖-ia-prioritaire-boosters` !)*",
+                     files: filesToSend
+                   });
+                 }
               }
             } catch(e) { console.error("Erreur envoi PDF", e); }
           }
