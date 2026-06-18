@@ -8,7 +8,15 @@ module.exports = [
   new SlashCommandBuilder().setName('avatar').setDescription('Affiche la photo de profil').addUserOption(opt => opt.setName('utilisateur').setDescription('Membre').setRequired(false)),
   new SlashCommandBuilder().setName('botinfo').setDescription('Stats du bot'),
   new SlashCommandBuilder().setName('roles').setDescription('Liste tous les rôles du serveur'),
-  new SlashCommandBuilder().setName('poll').setDescription('Crée un sondage interactif').addStringOption(opt => opt.setName('question').setDescription('Question').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('sondage')
+    .setDescription('Crée un sondage à choix multiples')
+    .addStringOption(opt => opt.setName('question').setDescription('La question du sondage').setRequired(true))
+    .addStringOption(opt => opt.setName('choix1').setDescription('Premier choix').setRequired(true))
+    .addStringOption(opt => opt.setName('choix2').setDescription('Deuxième choix').setRequired(true))
+    .addStringOption(opt => opt.setName('choix3').setDescription('Troisième choix').setRequired(false))
+    .addStringOption(opt => opt.setName('choix4').setDescription('Quatrième choix').setRequired(false))
+    .addStringOption(opt => opt.setName('choix5').setDescription('Cinquième choix').setRequired(false)),
   new SlashCommandBuilder().setName('say').setDescription('Fait parler le bot').addStringOption(opt => opt.setName('message').setDescription('Message').setRequired(true))
 ];
 
@@ -58,12 +66,34 @@ module.exports.execute = async (interaction) => {
     return interaction.reply({ content: `**Rôles du serveur:**\n${roles.substring(0, 1900)}` });
   }
 
-  if (commandName === 'poll') {
+  if (commandName === 'sondage') {
     const question = options.getString('question');
-    const embed = new EmbedBuilder().setTitle('📊 Sondage').setDescription(question).setColor(0xCF6B45);
+    const choices = [];
+    for (let i = 1; i <= 5; i++) {
+      const choice = options.getString(`choix${i}`);
+      if (choice) choices.push(choice);
+    }
+
+    const emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
+    let descriptionText = `**${question}**\n\n`;
+    
+    choices.forEach((choice, index) => {
+      descriptionText += `${emojis[index]} ${choice}\n\n`;
+    });
+
+    const embed = new EmbedBuilder()
+      .setTitle('📊 Nouveau Sondage')
+      .setDescription(descriptionText)
+      .setColor(0xCF6B45)
+      .setFooter({ text: `Sondage créé par ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() })
+      .setTimestamp();
+
     const msg = await interaction.reply({ embeds: [embed], fetchReply: true });
-    await msg.react('✅');
-    await msg.react('❌');
+    
+    for (let i = 0; i < choices.length; i++) {
+      await msg.react(emojis[i]);
+    }
+    return;
   }
 
   if (commandName === 'say') {

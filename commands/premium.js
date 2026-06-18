@@ -82,7 +82,11 @@ module.exports = [
     
   new SlashCommandBuilder().setName('imagine_pro')
     .setDescription('💎 VIP: Génère une image de très haute qualité')
-    .addStringOption(opt => opt.setName('prompt').setDescription('Description de l\'image').setRequired(true))
+    .addStringOption(opt => opt.setName('prompt').setDescription('Description de l\'image').setRequired(true)),
+    
+  new SlashCommandBuilder().setName('business_plan')
+    .setDescription('💎 VIP: Rédige un business plan complet pour ton projet')
+    .addStringOption(opt => opt.setName('projet').setDescription('Ton idée de projet').setRequired(true))
 ];
 
 module.exports.execute = async (interaction) => {
@@ -112,6 +116,7 @@ module.exports.execute = async (interaction) => {
         { name: "💻 Coach Développeur (`/code_review`)", value: "Faites analyser, débugger et corriger votre code par un CTO IA virtuel.", inline: false },
         { name: "✍️ Copywriter Pro (`/copywriter`)", value: "Réécrivez vos brouillons en textes hypnotiques, sans fautes et professionnels.", inline: false },
         { name: "🎨 Créateur d'Images 8K (`/imagine_pro`)", value: "Générez des images en qualité maximale sans file d'attente.", inline: false },
+        { name: "📈 Consultant Business (`/business_plan`)", value: "Demandez à l'IA de structurer et d'écrire un business plan complet pour vos projets.", inline: false },
         { name: "🚀 Sans Limites", value: "Vos requêtes sont prioritaires sur le serveur !", inline: false }
       )
       .setFooter({ text: "Soutenez le serveur et obtenez le rôle Premium !" });
@@ -183,21 +188,25 @@ module.exports.execute = async (interaction) => {
   }
 
   if (commandName === 'giveaway') {
+    await interaction.deferReply({ ephemeral: true });
     const timeInMinutes = options.getInteger('temps');
     const prize = options.getString('lot');
+    
+    const banner = new AttachmentBuilder('./giveaway_banner.png');
     
     const embed = new EmbedBuilder()
       .setColor(0xCF6B45)
       .setTitle('🎉 NOUVEAU GIVEAWAY 🎉')
-      .setDescription(`**Lot à gagner :** ${prize}\n\nCliquez sur le bouton ci-dessous pour participer !\n**Tirage dans :** ${timeInMinutes} minute(s)`)
+      .setDescription(`**Lot à gagner :** ${prize}\n\n**⚠️ Condition Obligatoire :** Invitez 1 ami sur le serveur pour être éligible au tirage !\n\nCliquez sur le bouton ci-dessous pour participer !\n\n**Tirage dans :** ${timeInMinutes} minute(s)\n\n**👥 Participants (0) :**\n*(Soyez le premier à participer !)*`)
+      .setImage('attachment://giveaway_banner.png')
       .setTimestamp(Date.now() + timeInMinutes * 60000);
       
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('join_giveaway').setLabel('🎉 Participer').setStyle(ButtonStyle.Primary)
     );
     
-    const giveawayMsg = await interaction.channel.send({ embeds: [embed], components: [row] });
-    await interaction.reply({ content: '✅ Giveaway lancé.', ephemeral: true });
+    const giveawayMsg = await interaction.channel.send({ embeds: [embed], components: [row], files: [banner] });
+    await interaction.editReply({ content: '✅ Giveaway lancé.' });
     
     if (!client.giveaways) client.giveaways = {};
     client.giveaways[giveawayMsg.id] = [];
@@ -322,6 +331,29 @@ module.exports.execute = async (interaction) => {
         .setFooter({ text: `⚡ ${remaining}/12000 requêtes IA restantes aujourd'hui` });
         
       await interaction.editReply({ embeds: [embed] });
+    } catch (e) {
+      await interaction.editReply("❌ Les serveurs IA sont surchargés, réessaie dans un instant.");
+    }
+  }
+
+  if (commandName === 'business_plan') {
+    if (!checkVIP(interaction)) return interaction.reply({ content: "❌ Cette commande est réservée aux membres Premium/VIP !", ephemeral: true });
+    await interaction.deferReply();
+    const projet = options.getString('projet');
+    const prompt = `Voici une idée de projet ou d'entreprise :\n\n"${projet}"\n\nRédige un business plan complet, structuré, très professionnel et réaliste pour ce projet (Modèle économique, Analyse de marché, Stratégie marketing, Projections financières simplifiées).`;
+    
+    try {
+      let response = await callVIPAI(prompt, "Tu es un consultant expert en stratégie d'entreprise et finance (ex-McKinsey).");
+      const remaining = consumeQuota();
+      const footer = `\n\n*⚡ ${remaining}/12000 requêtes IA restantes aujourd'hui*`;
+      
+      const chunks = response.match(/[\s\S]{1,1900}/g) || [];
+      await interaction.editReply("📈 **Ton Business Plan VIP est prêt :**");
+      for (let i = 0; i < chunks.length; i++) {
+        let contentToSend = chunks[i];
+        if (i === chunks.length - 1) contentToSend += footer;
+        await interaction.channel.send(contentToSend);
+      }
     } catch (e) {
       await interaction.editReply("❌ Les serveurs IA sont surchargés, réessaie dans un instant.");
     }

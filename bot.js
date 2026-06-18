@@ -3,6 +3,7 @@ const express = require('express');
 const fs = require('fs');
 const Parser = require('rss-parser');
 const parser = new Parser();
+const discordTranscripts = require('discord-html-transcripts');
 require('dotenv').config();
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { consumeQuota, getRemainingQuota } = require('./utils/quota');
@@ -21,10 +22,25 @@ function getGeminiModel() {
 }
 
 const aiSessions = new Map(); // userId -> chatSession
+const activeTicketCreations = new Set(); // Prevent double-click ticket race conditions
 
 // --- SERVER EXPRESS (Keep-Alive pour Render) ---
 const app = express();
 app.get('/', (req, res) => res.send('Bot is running 24/7!'));
+
+// --- DASHBOARD ROUTING ---
+app.get('/api/logs', (req, res) => {
+  const logFile = './chat_logs.json';
+  if (fs.existsSync(logFile)) {
+    res.sendFile(require('path').resolve(logFile));
+  } else {
+    res.json({});
+  }
+});
+app.get('/logs', (req, res) => {
+  res.sendFile(require('path').resolve('./dashboard.html'));
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log('🌍 Serveur web lancé sur le port ' + PORT));
 
@@ -379,12 +395,42 @@ client.on('messageCreate', async (message) => {
             aiSessions.delete(userId);
           }
           
-          // Anti-spam en cas d'erreur 503 (Server Overload)
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Anti-spam rapide pour tester la prochaine clé
+          await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
       
       if (success) {
+        
+        // --- LOGGING ---
+        try {
+          const logFile = './chat_logs.json';
+          let logs = {};
+          if (fs.existsSync(logFile)) {
+            logs = JSON.parse(fs.readFileSync(logFile, 'utf8'));
+          }
+          if (!logs[userId]) {
+            logs[userId] = {
+              username: message.author.username,
+              messages: []
+            };
+          }
+          logs[userId].username = message.author.username;
+          logs[userId].messages.push({
+            role: 'user',
+            content: message.content,
+            timestamp: new Date().toISOString()
+          });
+          logs[userId].messages.push({
+            role: 'model',
+            content: aiResponse,
+            timestamp: new Date().toISOString()
+          });
+          fs.writeFileSync(logFile, JSON.stringify(logs, null, 2));
+        } catch (err) {
+          console.error("Erreur de sauvegarde des logs:", err);
+        }
+        
         let finalResponse = aiResponse.trim();
         
         // Détection de génération d'image
@@ -571,43 +617,72 @@ client.on('interactionCreate', async interaction => {
   
   // Buttons handler (Tickets, Verification, Giveaways)
   if (interaction.isButton()) {
-    if (interaction.customId === 'join_giveaway') {
-      if (!client.giveaways) client.giveaways = {};
-      if (!client.giveaways[interaction.message.id]) client.giveaways[interaction.message.id] = [];
-      
-      const participants = client.giveaways[interaction.message.id];
-      if (!participants.includes(interaction.user.id)) {
-        participants.push(interaction.user.id);
-        await interaction.reply({ content: '🎉 Tu participes bien au giveaway !', ephemeral: true });
-      } else {
-        await interaction.reply({ content: 'Tu participes déjà à ce giveaway.', ephemeral: true });
-      }
-      return;
-    }
+    try {
+      if (interaction.customId === 'join_giveaway') {
+        if (!client.giveaways) client.giveaways = {};
+        if (!client.giveaways[interaction.message.id]) client.giveaways[interaction.message.id] = [];
+        
+        const participants = client.giveaways[interaction.message.id];
+        if (!participants.includes(interaction.user.id)) {
+          participants.push(interaction.user.id);
+          
+          const embed = require('discord.js').EmbedBuilder.from(interaction.message.embeds[0]);
+          let desc = embed.data.description;
+          const baseDescIndex = desc.indexOf('**👥 Participants');
+          
+          if (baseDescIndex !== -1) {
+             const baseDesc = desc.substring(0, baseDescIndex);
+             let participantList = participants.map(id => `<@${id}>`).join(', ');
+             if (participantList.length > 1000) {
+                 participantList = participantList.substring(0, 1000) + '... et bien d\'autres !';
+             }
+             embed.setDescription(`${baseDesc}**👥 Participants (${participants.length}) :**\n${participantList}`);
+             await interaction.message.edit({ embeds: [embed] });
+          }
 
-    if (interaction.customId === 'verify_member') {
-      const role = interaction.guild.roles.cache.get(ROLE_NOUVEAU);
-      if (role) {
-        if (!interaction.member.roles.cache.has(role.id)) {
-          await interaction.member.roles.add(role);
-          await interaction.reply({ content: '✅ Vérification réussie ! Bienvenue sur le serveur.', ephemeral: true });
+          await interaction.reply({ content: '🎉 Tu participes bien au giveaway !', ephemeral: true });
         } else {
-          await interaction.reply({ content: 'Tu es déjà vérifié.', ephemeral: true });
+          await interaction.reply({ content: 'Tu participes déjà à ce giveaway.', ephemeral: true });
         }
+        return;
       }
-      return;
-    }
+
+      if (interaction.customId === 'verify_member') {
+        const role = interaction.guild.roles.cache.get(ROLE_NOUVEAU);
+        if (role) {
+          if (!interaction.member.roles.cache.has(role.id)) {
+            await interaction.member.roles.add(role);
+            await interaction.reply({ content: '✅ Vérification réussie ! Bienvenue sur le serveur.', ephemeral: true });
+          } else {
+            await interaction.reply({ content: 'Tu es déjà vérifié.', ephemeral: true });
+          }
+        }
+        return;
+      }
 
     if (interaction.customId.startsWith('ticket_')) {
       const type = interaction.customId.split('_')[1]; // support, booster, premium
       
-      const guild = interaction.guild;
-      // Chercher la catégorie "🎫 TICKETS EN COURS"
-      let category = guild.channels.cache.find(c => c.name === '🎫 TICKETS EN COURS' && c.type === ChannelType.GuildCategory);
-      if(!category) category = await guild.channels.create({ name: '🎫 TICKETS EN COURS', type: ChannelType.GuildCategory });
-      
       const channelName = 'ticket-' + interaction.user.username.toLowerCase();
-      const ticketChannel = await guild.channels.create({
+      
+      if (activeTicketCreations.has(interaction.user.id)) {
+        return interaction.reply({ content: '⏳ Création en cours... merci de ne pas spammer le bouton.', ephemeral: true });
+      }
+      activeTicketCreations.add(interaction.user.id);
+      
+      try {
+        const guild = interaction.guild;
+        // Chercher la catégorie "🎫 TICKETS EN COURS"
+        let category = guild.channels.cache.find(c => c.name === '🎫 TICKETS EN COURS' && c.type === ChannelType.GuildCategory);
+        if(!category) category = await guild.channels.create({ name: '🎫 TICKETS EN COURS', type: ChannelType.GuildCategory });
+        
+        const existingTicket = guild.channels.cache.find(c => c.name === channelName);
+        if (existingTicket) {
+          activeTicketCreations.delete(interaction.user.id);
+          return interaction.reply({ content: `❌ Tu as déjà un ticket d'ouvert ici : <#${existingTicket.id}>. Tu ne peux pas en ouvrir un autre.`, ephemeral: true });
+        }
+        
+        const ticketChannel = await guild.channels.create({
         name: channelName,
         type: ChannelType.GuildText,
         parent: category.id,
@@ -640,15 +715,45 @@ client.on('interactionCreate', async interaction => {
         .setTimestamp();
         
       await ticketChannel.send({ content: "Bienvenue <@" + interaction.user.id + "> !", embeds: [embed], components: [row], files: [attachment] });
-      await interaction.reply({ content: '✅ Ton ticket a été ouvert : <#' + ticketChannel.id + '>', ephemeral: true });
+        await interaction.reply({ content: `✅ Ton ticket a été ouvert : ${ticketChannel}`, ephemeral: true });
+      } catch (error) {
+        console.error(error);
+        await interaction.reply({ content: "❌ Une erreur est survenue lors de la création du ticket.", ephemeral: true });
+      } finally {
+        setTimeout(() => activeTicketCreations.delete(interaction.user.id), 3000); // Remove lock after 3 seconds
+      }
     }
     
     if (interaction.customId === 'close_ticket') {
       if (!interaction.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
         return interaction.reply({ content: '❌ Seul le staff peut fermer un ticket.', ephemeral: true });
       }
-      await interaction.reply({ content: '🔒 Le ticket se fermera dans 5 secondes...' });
+      await interaction.reply({ content: '🔒 Le ticket est en cours de fermeture... Sauvegarde de la conversation.' });
+      
+      try {
+        const attachment = await discordTranscripts.createTranscript(interaction.channel, {
+             limit: -1, 
+             returnType: 'attachment',
+             filename: `transcript-${interaction.channel.name}.html`,
+             saveImages: true, 
+             poweredBy: false
+        });
+        
+        const members = interaction.channel.members.filter(m => !m.user.bot);
+        for (const [id, member] of members) {
+            await member.send({
+                content: `📁 Voici une copie de ton ticket **${interaction.channel.name}** fermé sur Claude+. Tu peux ouvrir le fichier HTML sur ton navigateur (PC ou Téléphone) pour lire la conversation complète avec le design de Discord.`,
+                files: [attachment]
+            }).catch(() => {});
+        }
+      } catch (e) {
+        console.error("Erreur lors de la génération du transcript:", e);
+      }
+      
       setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
+    }
+    } catch (e) {
+      console.error("Erreur lors du traitement d'un bouton :", e);
     }
   }
 });
