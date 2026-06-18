@@ -36,7 +36,7 @@ function getGeminiModel() {
         });
         // Utilisation de .preview pour accéder aux modèles les plus récents
         vertexModelInstance = vertex_ai.preview.getGenerativeModel({
-          model: 'gemini-2.5-pro',
+          model: 'gemini-3.1-pro-preview',
           systemInstruction: sysInstr
         });
         vertexInitialized = true;
