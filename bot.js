@@ -36,7 +36,7 @@ function getGeminiModel() {
         });
         // Utilisation de .preview pour accéder aux modèles les plus récents
         vertexModelInstance = vertex_ai.preview.getGenerativeModel({
-          model: 'gemini-3.1-pro-preview',
+          model: 'gemini-2.5-pro',
           systemInstruction: sysInstr
         });
         vertexInitialized = true;
@@ -440,6 +440,13 @@ client.on('messageCreate', async (message) => {
             } catch (e) {}
           }
 
+          // Si on utilise Vertex AI et que ça crashe (ex: API non activée, quota, modèle invalide)
+          if (process.env.VERTEX_CREDENTIALS_JSON) {
+              success = true; // On arrête la boucle
+              aiResponse = "⚠️ **Erreur critique avec Vertex AI** : L'API Google Cloud a refusé la connexion.\n\n*Causes probables :*\n1. Tu n'as pas activé l'API Vertex AI sur Google Cloud Console.\n2. Le modèle est introuvable sur cette région.\n\n*Détail de l'erreur :* `" + apiError.message + "`";
+              break;
+          }
+
           currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
           attempt++;
           
@@ -452,12 +459,10 @@ client.on('messageCreate', async (message) => {
           }
           
           if (attempt >= apiKeys.length) {
-            // Toutes les clés ont été essayées. On est victime du Rate Limit global.
-            // On patiente 2 secondes et on relance la boucle indéfiniment jusqu'à libération du quota !
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            attempt = 0;
+            success = true; // On arrête la boucle pour éviter de bloquer le bot
+            aiResponse = "⚠️ L'intelligence artificielle est temporairement surchargée ou une erreur de configuration est survenue. Veuillez réessayer plus tard.";
+            break;
           } else {
-            // Anti-spam rapide pour tester la prochaine clé
             await new Promise(resolve => setTimeout(resolve, 50));
           }
         }
