@@ -327,12 +327,24 @@ client.on('messageCreate', async (message) => {
                   
                   // Assurer que le texte n'est pas vide après nettoyage
                   if (text.length > 0) {
-                    history.push({
-                      role: msg.author.id === client.user.id ? "model" : "user",
-                      parts: [{ text: text }]
-                    });
+                    const role = msg.author.id === client.user.id ? "model" : "user";
+                    // Gemini exige une alternance stricte des rôles (user -> model -> user)
+                    if (history.length > 0 && history[history.length - 1].role === role) {
+                      history[history.length - 1].parts[0].text += '\n\n' + text;
+                    } else {
+                      history.push({ role: role, parts: [{ text: text }] });
+                    }
                   }
                 }
+              }
+              
+              // L'API Gemini exige que l'historique commence TOUJOURS par "user"
+              if (history.length > 0 && history[0].role === 'model') {
+                history.shift();
+              }
+              // Et l'API Gemini exige que l'historique se termine par "model" (car le prochain message sera "user")
+              if (history.length > 0 && history[history.length - 1].role === 'user') {
+                history.pop();
               }
             } catch (err) {
               console.error("Erreur lors de la récupération de l'historique Discord:", err);
