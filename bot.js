@@ -29,6 +29,7 @@ function getGeminiModel() {
           region: 'us-central1',
           projectId: creds.project_id,
           googleAuth: new GoogleAuth({
+            scopes: 'https://www.googleapis.com/auth/cloud-platform',
             credentials: {
               client_email: creds.client_email,
               private_key: creds.private_key
