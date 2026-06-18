@@ -18,7 +18,8 @@ module.exports = [
     .addStringOption(opt => opt.setName('choix4').setDescription('Quatrième choix').setRequired(false))
     .addStringOption(opt => opt.setName('choix5').setDescription('Cinquième choix').setRequired(false)),
   new SlashCommandBuilder().setName('say').setDescription('Fait parler le bot').addStringOption(opt => opt.setName('message').setDescription('Message').setRequired(true)),
-  new SlashCommandBuilder().setName('invites').setDescription('Affiche le nombre d\'invitations d\'un membre').addUserOption(opt => opt.setName('utilisateur').setDescription('Membre ciblé (laisser vide pour voir ses propres stats)').setRequired(false))
+  new SlashCommandBuilder().setName('invites').setDescription('Affiche le nombre d\'invitations d\'un membre').addUserOption(opt => opt.setName('utilisateur').setDescription('Membre ciblé (laisser vide pour voir ses propres stats)').setRequired(false)),
+  new SlashCommandBuilder().setName('topinvites').setDescription('Affiche le classement des meilleurs recruteurs du serveur')
 ];
 
 module.exports.execute = async (interaction) => {
@@ -122,6 +123,50 @@ module.exports.execute = async (interaction) => {
         .setColor(0xCF6B45)
         .setThumbnail(target.displayAvatarURL());
 
+      return interaction.reply({ embeds: [embed] });
+    } catch (err) {
+      console.error(err);
+      return interaction.reply({ content: '❌ Impossible de récupérer les invitations. Assurez-vous que le bot a la permission "Gérer le serveur".', ephemeral: true });
+    }
+  }
+  if (commandName === 'topinvites') {
+    try {
+      const invites = await guild.invites.fetch();
+      
+      // Map to store uses per inviter
+      const inviteCounts = new Map();
+      
+      invites.forEach(invite => {
+        if (invite.inviter) {
+          const inviterId = invite.inviter.id;
+          const currentUses = inviteCounts.get(inviterId) || { uses: 0, user: invite.inviter };
+          currentUses.uses += invite.uses || 0;
+          inviteCounts.set(inviterId, currentUses);
+        }
+      });
+      
+      // Sort and get top 10
+      const sortedInvites = Array.from(inviteCounts.values())
+        .filter(inv => inv.uses > 0)
+        .sort((a, b) => b.uses - a.uses)
+        .slice(0, 10);
+        
+      if (sortedInvites.length === 0) {
+        return interaction.reply({ content: 'Aucune invitation utilisée pour le moment.', ephemeral: true });
+      }
+      
+      let description = '';
+      sortedInvites.forEach((inv, index) => {
+        const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '🔹';
+        description += `${medal} **${inv.user.username}** : ${inv.uses} invitation(s)\n`;
+      });
+      
+      const embed = new EmbedBuilder()
+        .setTitle('🏆 Classement des Recruteurs')
+        .setDescription(description)
+        .setColor(0xCF6B45)
+        .setThumbnail(guild.iconURL());
+        
       return interaction.reply({ embeds: [embed] });
     } catch (err) {
       console.error(err);
