@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const doc = new PDFDocument({ margin: 50, size: 'A4' });
-const outputPath = path.join(__dirname, '100_Methodes_Secretes_IA.pdf');
+const outputPath = path.join(__dirname, '100_Methodes_Exclusives_V2.pdf');
 
 doc.pipe(fs.createWriteStream(outputPath));
 

@@ -142,12 +142,31 @@ client.once('ready', async () => {
       // Restauration au démarrage
       const messages = await dbChannel.messages.fetch({ limit: 10 });
       const lastBackup = messages.find(m => m.attachments.size > 0 && m.attachments.first().name === 'chat_logs.json');
-      if (lastBackup && !require('fs').existsSync('./chat_logs.json')) {
-        const fetch = require('node-fetch');
-        const res = await fetch(lastBackup.attachments.first().url);
-        const data = await res.text();
-        require('fs').writeFileSync('./chat_logs.json', data);
-        console.log("💾 Base de données restaurée avec succès depuis Discord !");
+      if (lastBackup) {
+        try {
+          const res = await fetch(lastBackup.attachments.first().url);
+          const data = await res.text();
+          
+          let existingData = {};
+          if (require('fs').existsSync('./chat_logs.json')) {
+            try { existingData = JSON.parse(require('fs').readFileSync('./chat_logs.json', 'utf8')); } catch(e){}
+          }
+          const backupData = JSON.parse(data);
+          
+          // Fusionner les données pour ne perdre ni le backup, ni les nouveaux messages reçus pendant le boot
+          for (const key in backupData) {
+             if (!existingData[key]) existingData[key] = backupData[key];
+             else {
+               const existingIds = new Set(existingData[key].messages.map(m => m.timestamp));
+               backupData[key].messages.forEach(m => {
+                 if (!existingIds.has(m.timestamp)) existingData[key].messages.push(m);
+               });
+               existingData[key].messages.sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+             }
+          }
+          require('fs').writeFileSync('./chat_logs.json', JSON.stringify(existingData, null, 2));
+          console.log("💾 Base de données restaurée et fusionnée avec succès depuis Discord !");
+        } catch(e) { console.error("Erreur téléchargement DB:", e); }
       }
 
       // Backup automatique toutes les 2 minutes
@@ -359,14 +378,14 @@ client.once('ready', async () => {
           if (ch && chName === '🎁-cadeaux-boosters') {
             try {
               const messages = await ch.messages.fetch({ limit: 10 });
-              // On vérifie si les 100 Méthodes ont déjà été envoyées
-              const hasNewBundle = messages.some(m => m.attachments.size > 0 && m.attachments.some(a => a.name === '100_Methodes_Secretes_IA.pdf'));
+              // On vérifie si les 100 Méthodes V2 ont déjà été envoyées
+              const hasNewBundle = messages.some(m => m.attachments.size > 0 && m.attachments.some(a => a.name === '100_Methodes_Exclusives_V2.pdf'));
               
               if (!hasNewBundle) {
                  const filesToSend = [];
                  if (require('fs').existsSync('./50_prompts_ia.pdf')) filesToSend.push('./50_prompts_ia.pdf');
                  if (require('fs').existsSync('./Formation_Masterclass_IA.pdf')) filesToSend.push('./Formation_Masterclass_IA.pdf');
-                 if (require('fs').existsSync('./100_Methodes_Secretes_IA.pdf')) filesToSend.push('./100_Methodes_Secretes_IA.pdf');
+                 if (require('fs').existsSync('./100_Methodes_Exclusives_V2.pdf')) filesToSend.push('./100_Methodes_Exclusives_V2.pdf');
                  
                  if (filesToSend.length > 0) {
                    await ch.send({
