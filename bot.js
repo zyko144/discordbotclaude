@@ -83,7 +83,8 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.DirectMessages,
-    GatewayIntentBits.GuildPresences
+    GatewayIntentBits.GuildPresences,
+    GatewayIntentBits.GuildInvites
   ],
   partials: [Partials.Message, Partials.Channel, Partials.Reaction]
 });
@@ -117,8 +118,20 @@ const dbPath = './database.json';
 
 // --- EVENTS ---
 
+const invitesCache = new Map();
+
 client.once('ready', async () => {
   console.log('🤖 Mega-Bot connecté en tant que ' + client.user.tag + ' ! Prêt pour Render avec 30+ commandes.');
+  
+  // Cache invites for all guilds
+  for (const [id, g] of client.guilds.cache) {
+    try {
+      const firstInvites = await g.invites.fetch();
+      invitesCache.set(id, new Map(firstInvites.map((invite) => [invite.code, invite.uses])));
+    } catch (err) {
+      console.log(`Cannot fetch invites for guild: ${id}`);
+    }
+  }
 
   const guild = client.guilds.cache.first();
   if (guild) {
@@ -926,6 +939,53 @@ client.on('messageReactionRemove', async (reaction, user) => {
     const member = await reaction.message.guild.members.fetch(user.id);
     const role = reaction.message.guild.roles.cache.get(roleId);
     if (role && member) await member.roles.remove(role).catch(() => {});
+  }
+});
+client.on('inviteCreate', invite => {
+  const guildInvites = invitesCache.get(invite.guild.id);
+  if (guildInvites) guildInvites.set(invite.code, invite.uses);
+});
+
+client.on('inviteDelete', invite => {
+  const guildInvites = invitesCache.get(invite.guild.id);
+  if (guildInvites) guildInvites.delete(invite.code);
+});
+
+client.on('guildMemberAdd', async member => {
+  try {
+    const newInvites = await member.guild.invites.fetch();
+    const oldInvites = invitesCache.get(member.guild.id);
+    let usedInvite = null;
+
+    if (oldInvites) {
+      usedInvite = newInvites.find(i => i.uses > (oldInvites.get(i.code) || 0));
+      newInvites.forEach(invite => oldInvites.set(invite.code, invite.uses));
+    }
+
+    let welcomeChannel = member.guild.channels.cache.find(c => c.name === '👋-bienvenue');
+    if (!welcomeChannel) {
+      welcomeChannel = await member.guild.channels.create({
+        name: '👋-bienvenue',
+        type: ChannelType.GuildText,
+        permissionOverwrites: [{ id: member.guild.roles.everyone.id, deny: [PermissionFlagsBits.SendMessages] }]
+      }).catch(() => null);
+    }
+
+    if (welcomeChannel) {
+      const inviterText = usedInvite && usedInvite.inviter 
+        ? `Invité par **${usedInvite.inviter.username}** (Lien utilisé **${usedInvite.uses}** fois)` 
+        : `Impossible de déterminer qui l'a invité`;
+
+      const embed = new EmbedBuilder()
+        .setTitle('🎉 Nouveau Membre !')
+        .setDescription(`Bienvenue ${member.user.toString()} sur **${member.guild.name}** !\n\n> 🤝 ${inviterText}`)
+        .setColor(0xCF6B45)
+        .setThumbnail(member.user.displayAvatarURL());
+
+      await welcomeChannel.send({ embeds: [embed] }).catch(() => {});
+    }
+  } catch (err) {
+    console.error("Erreur guildMemberAdd", err);
   }
 });
 
