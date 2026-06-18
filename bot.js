@@ -309,14 +309,35 @@ client.on('messageCreate', async (message) => {
     }
 
     try {
-      await message.channel.sendTyping();
+      // --- INSTANT USER LOGGING ---
       const userId = message.author.id;
+      try {
+        const logFile = './chat_logs.json';
+        let logs = {};
+        if (require('fs').existsSync(logFile)) {
+          logs = JSON.parse(require('fs').readFileSync(logFile, 'utf8'));
+        }
+        if (!logs[userId]) {
+          logs[userId] = { username: message.author.username, messages: [] };
+        }
+        logs[userId].username = message.author.username;
+        logs[userId].messages.push({
+          role: 'user',
+          content: message.content,
+          timestamp: new Date().toISOString()
+        });
+        require('fs').writeFileSync(logFile, JSON.stringify(logs, null, 2));
+      } catch (err) {
+        console.error("Erreur log instantané:", err);
+      }
+      
+      await message.channel.sendTyping();
       
       let attempt = 0;
       let success = false;
       let aiResponse = "";
       
-      while (attempt < apiKeys.length && !success) {
+      while (!success) {
         try {
           if (!aiSessions.has(userId)) {
             const model = getGeminiModel();
@@ -395,8 +416,15 @@ client.on('messageCreate', async (message) => {
             aiSessions.delete(userId);
           }
           
-          // Anti-spam rapide pour tester la prochaine clé
-          await new Promise(resolve => setTimeout(resolve, 50));
+          if (attempt >= apiKeys.length) {
+            // Toutes les clés ont été essayées. On est victime du Rate Limit global.
+            // On patiente 2 secondes et on relance la boucle indéfiniment jusqu'à libération du quota !
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            attempt = 0;
+          } else {
+            // Anti-spam rapide pour tester la prochaine clé
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
         }
       }
       
@@ -416,11 +444,6 @@ client.on('messageCreate', async (message) => {
             };
           }
           logs[userId].username = message.author.username;
-          logs[userId].messages.push({
-            role: 'user',
-            content: message.content,
-            timestamp: new Date().toISOString()
-          });
           logs[userId].messages.push({
             role: 'model',
             content: aiResponse,
@@ -502,8 +525,6 @@ client.on('messageCreate', async (message) => {
         if (message.channel.type !== ChannelType.DM) {
           await message.reply("📩 Je t'ai répondu en privé pour garder ce salon propre ! Tu peux continuer la conversation avec moi là-bas.");
         }
-      } else {
-        await message.reply("❌ Désolé, mes serveurs sont actuellement surchargés (beaucoup de requêtes à la fois). Réessaie dans une minute ! ⚡").catch(() => {});
       }
     } catch (error) {
       console.error('Gemini General Error:', error);
