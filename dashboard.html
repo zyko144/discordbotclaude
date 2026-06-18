@@ -237,12 +237,12 @@
 
     function renderUserList() {
       const userIds = Object.keys(logsData);
-      document.getElementById('stats-text').innerText = \`\${userIds.length} membre(s) loggé(s)\`;
+      document.getElementById('stats-text').innerText = `${userIds.length} membre(s) loggé(s)`;
       
       const listContainer = document.getElementById('user-list');
       listContainer.innerHTML = '';
 
-      // Trier par date du dernier message (le plus rcent en premier)
+      // Trier par date du dernier message (le plus récent en premier)
       userIds.sort((a, b) => {
         const timeA = new Date(logsData[a].messages[logsData[a].messages.length - 1].timestamp).getTime();
         const timeB = new Date(logsData[b].messages[logsData[b].messages.length - 1].timestamp).getTime();
@@ -265,13 +265,13 @@
 
         const initial = user.username.charAt(0).toUpperCase();
 
-        div.innerHTML = \`
-          <div class="user-avatar">\${initial}</div>
+        div.innerHTML = `
+          <div class="user-avatar">${initial}</div>
           <div class="user-info">
-            <h3>\${user.username}</h3>
-            <p>\${user.messages.length} msg(s) • \${lastMsgTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+            <h3>${user.username}</h3>
+            <p>${user.messages.length} msg(s) • ${lastMsgTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
           </div>
-        \`;
+        `;
         listContainer.appendChild(div);
       });
     }
@@ -280,7 +280,7 @@
       currentUserId = userId;
       const user = logsData[userId];
       document.getElementById('chat-header').style.display = 'block';
-      document.getElementById('chat-title').innerText = \`Conversation avec \${user.username}\`;
+      document.getElementById('chat-title').innerText = `Conversation avec ${user.username}`;
       
       const container = document.getElementById('messages-container');
       
@@ -291,15 +291,15 @@
 
       user.messages.forEach(msg => {
         const wrapper = document.createElement('div');
-        wrapper.className = \`msg-wrapper \${msg.role === 'user' ? 'user' : 'bot'}\`;
+        wrapper.className = `msg-wrapper ${msg.role === 'user' ? 'user' : 'bot'}`;
         
         const date = new Date(msg.timestamp);
         const timeStr = date.toLocaleDateString() + ' à ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
-        wrapper.innerHTML = \`
-          <div class="msg-bubble">\${escapeHTML(msg.content)}</div>
-          <div class="msg-time">\${msg.role === 'user' ? user.username : 'Claude+ IA'} • \${timeStr}</div>
-        \`;
+        wrapper.innerHTML = `
+          <div class="msg-bubble">${escapeHTML(msg.content)}</div>
+          <div class="msg-time">${msg.role === 'user' ? user.username : 'Claude+ IA'} • ${timeStr}</div>
+        `;
         container.appendChild(wrapper);
       });
 
