@@ -304,7 +304,41 @@ client.on('messageCreate', async (message) => {
         try {
           if (!aiSessions.has(userId)) {
             const model = getGeminiModel();
-            const chatSession = model.startChat({ history: [] });
+            let history = [];
+            
+            try {
+              // Récupération intelligente de l'historique Discord pour restaurer la mémoire après un redémarrage
+              const messages = await message.channel.messages.fetch({ limit: 30, before: message.id });
+              
+              // Discord renvoie du plus récent au plus ancien, on inverse pour l'ordre chronologique
+              const validMessages = Array.from(messages.values())
+                .filter(msg => msg.author.id === userId || msg.author.id === client.user.id)
+                .reverse();
+              
+              for (const msg of validMessages) {
+                let text = msg.content;
+                if (!text && msg.attachments.size > 0) {
+                  text = "[Fichier attaché envoyé]";
+                }
+                
+                // Nettoyage des balises de footer pour ne pas polluer la mémoire de l'IA
+                if (text) {
+                  text = text.replace(/\n\n\*⚡.*requêtes IA restantes aujourd'hui\*/g, '').trim();
+                  
+                  // Assurer que le texte n'est pas vide après nettoyage
+                  if (text.length > 0) {
+                    history.push({
+                      role: msg.author.id === client.user.id ? "model" : "user",
+                      parts: [{ text: text }]
+                    });
+                  }
+                }
+              }
+            } catch (err) {
+              console.error("Erreur lors de la récupération de l'historique Discord:", err);
+            }
+
+            const chatSession = model.startChat({ history: history });
             aiSessions.set(userId, chatSession);
           }
           
