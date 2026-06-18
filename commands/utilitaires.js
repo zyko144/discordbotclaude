@@ -131,13 +131,22 @@ module.exports.execute = async (interaction) => {
   }
   if (commandName === 'topinvites') {
     try {
+      // Fetch all invites and all members
       const invites = await guild.invites.fetch();
+      const members = await guild.members.fetch();
       
-      // Map to store uses per inviter
       const inviteCounts = new Map();
       
+      // Initialize all members with 0 invites
+      members.forEach(member => {
+        if (!member.user.bot) {
+          inviteCounts.set(member.user.id, { uses: 0, user: member.user });
+        }
+      });
+      
+      // Add actual invite uses
       invites.forEach(invite => {
-        if (invite.inviter) {
+        if (invite.inviter && !invite.inviter.bot) {
           const inviterId = invite.inviter.id;
           const currentUses = inviteCounts.get(inviterId) || { uses: 0, user: invite.inviter };
           currentUses.uses += invite.uses || 0;
@@ -145,14 +154,13 @@ module.exports.execute = async (interaction) => {
         }
       });
       
-      // Sort and get top 10
+      // Sort and get top 15
       const sortedInvites = Array.from(inviteCounts.values())
-        .filter(inv => inv.uses > 0)
         .sort((a, b) => b.uses - a.uses)
-        .slice(0, 10);
+        .slice(0, 15);
         
       if (sortedInvites.length === 0) {
-        return interaction.reply({ content: 'Aucune invitation utilisée pour le moment.', ephemeral: true });
+        return interaction.reply({ content: 'Aucun membre trouvé.', ephemeral: true });
       }
       
       let description = '';
