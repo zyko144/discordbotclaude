@@ -17,7 +17,8 @@ module.exports = [
     .addStringOption(opt => opt.setName('choix3').setDescription('Troisième choix').setRequired(false))
     .addStringOption(opt => opt.setName('choix4').setDescription('Quatrième choix').setRequired(false))
     .addStringOption(opt => opt.setName('choix5').setDescription('Cinquième choix').setRequired(false)),
-  new SlashCommandBuilder().setName('say').setDescription('Fait parler le bot').addStringOption(opt => opt.setName('message').setDescription('Message').setRequired(true))
+  new SlashCommandBuilder().setName('say').setDescription('Fait parler le bot').addStringOption(opt => opt.setName('message').setDescription('Message').setRequired(true)),
+  new SlashCommandBuilder().setName('invites').setDescription('Affiche le nombre d\'invitations d\'un membre').addUserOption(opt => opt.setName('utilisateur').setDescription('Membre ciblé (laisser vide pour voir ses propres stats)').setRequired(false))
 ];
 
 module.exports.execute = async (interaction) => {
@@ -101,5 +102,30 @@ module.exports.execute = async (interaction) => {
     if (!interaction.member.permissions.has('ManageMessages')) return interaction.reply({content:'Non autorisé.', ephemeral:true});
     await interaction.channel.send(msg);
     return interaction.reply({ content: '✅ Message envoyé', ephemeral: true });
+  }
+
+  if (commandName === 'invites') {
+    const target = options.getUser('utilisateur') || interaction.user;
+    
+    try {
+      const invites = await guild.invites.fetch();
+      const userInvites = invites.filter(i => i.inviter && i.inviter.id === target.id);
+      
+      let totalUses = 0;
+      userInvites.forEach(invite => {
+        totalUses += invite.uses || 0;
+      });
+
+      const embed = new EmbedBuilder()
+        .setTitle(`📨 Invitations de ${target.username}`)
+        .setDescription(`${target.toString()} a invité **${totalUses}** membre(s) sur le serveur.`)
+        .setColor(0xCF6B45)
+        .setThumbnail(target.displayAvatarURL());
+
+      return interaction.reply({ embeds: [embed] });
+    } catch (err) {
+      console.error(err);
+      return interaction.reply({ content: '❌ Impossible de récupérer les invitations. Assurez-vous que le bot a la permission "Gérer le serveur".', ephemeral: true });
+    }
   }
 };
