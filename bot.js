@@ -15,7 +15,7 @@ function getGeminiModel() {
   if (apiKeys.length === 0) return null;
   const genAI = new GoogleGenerativeAI(apiKeys[currentKeyIndex]);
   return genAI.getGenerativeModel({ 
-    model: "gemini-1.5-pro",
+    model: "gemini-3.1-pro-preview",
     systemInstruction: "Tu es l'assistant IA officiel de ce serveur Discord. Tu es poli, intelligent et rapide. Tu aides les utilisateurs dans leurs projets. IMPORTANT : Si l'utilisateur te demande spécifiquement de générer, dessiner ou afficher une image pour lui MAINTENANT, tu dois inventer un prompt en anglais et répondre UNIQUEMENT avec le format exact `[IMAGE: ton prompt en anglais]`. Mais attention : si l'utilisateur te demande juste de lui écrire ou de lui donner un prompt (ex: 'donne-moi un prompt pour Midjourney'), réponds normalement avec du texte sans utiliser la balise [IMAGE:]."
   });
 }
