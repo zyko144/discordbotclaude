@@ -26,7 +26,7 @@ function getGeminiModel() {
         const creds = JSON.parse(process.env.VERTEX_CREDENTIALS_JSON);
         const vertex_ai = new VertexAI({
           project: creds.project_id,
-          location: 'us-central1',
+          location: 'global',
           googleAuthOptions: {
             credentials: {
               client_email: creds.client_email,
