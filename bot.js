@@ -423,7 +423,7 @@ client.on('messageCreate', async (message) => {
             history.push({ role: 'user', content: message.content });
 
             const result = await model.messages.create({
-              model: 'claude-3-5-sonnet-v2@20241022',
+              model: 'claude-sonnet-4-5@20250929',
               system: sysInstr,
               messages: history,
               max_tokens: 8192
