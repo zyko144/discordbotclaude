@@ -235,59 +235,92 @@ client.once('ready', async () => {
   // Sécurisation de la catégorie Espace VIP & Création du salon avantages-vip
   const guild = client.guilds.cache.first();
   if (guild) {
+    // 1. Catégorie PREMIUM (Espace VIP)
     let premiumRole = guild.roles.cache.find(r => r.name.toLowerCase().includes('premium') || r.name.toLowerCase().includes('vip'));
-    
-    // 1. Verrouiller la catégorie "Espace VIP"
-    let vipCategory = guild.channels.cache.find(c => c.name.toLowerCase().includes('espace vip') && c.type === ChannelType.GuildCategory);
-    if (vipCategory) {
+    let premiumCategory = guild.channels.cache.find(c => (c.name.toLowerCase().includes('espace vip') || c.name.toLowerCase().includes('premium')) && c.type === ChannelType.GuildCategory);
+    if (premiumCategory) {
       try {
         let overwrites = [
-          {
-            id: guild.id,
-            deny: [PermissionFlagsBits.ViewChannel], // Caché pour les membres normaux
-          }
+          { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] }
         ];
         if (premiumRole) {
-          overwrites.push({
-            id: premiumRole.id,
-            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages], // Visible pour les VIP
-          });
+          overwrites.push({ id: premiumRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] });
         }
-        await vipCategory.permissionOverwrites.set(overwrites);
-        
-        // Synchroniser tous les salons enfants avec la catégorie (pour être sûr qu'ils héritent de la permission)
-        const children = guild.channels.cache.filter(c => c.parentId === vipCategory.id);
+        await premiumCategory.permissionOverwrites.set(overwrites);
+        const children = guild.channels.cache.filter(c => c.parentId === premiumCategory.id);
         for (const [id, channel] of children) {
           await channel.lockPermissions().catch(() => {});
         }
-      } catch (err) {
-        console.error('Impossible de sécuriser la catégorie VIP:', err);
-      }
+      } catch (err) { console.error('Erreur VIP:', err); }
     }
     
-    // 1.5. Verrouiller la catégorie "Administration"
+    // 1.5. Catégorie Administration
     let adminCategory = guild.channels.cache.find(c => c.name.toLowerCase().includes('admin') && c.type === ChannelType.GuildCategory);
     if (adminCategory) {
       try {
-        let overwrites = [
-          {
-            id: guild.id,
-            deny: [PermissionFlagsBits.ViewChannel], // Caché pour tout le monde (sauf les admins du serveur qui voient tout par défaut)
-          }
-        ];
-        await adminCategory.permissionOverwrites.set(overwrites);
-        
-        // Synchroniser tous les salons enfants avec la catégorie Administration
+        await adminCategory.permissionOverwrites.set([{ id: guild.id, deny: [PermissionFlagsBits.ViewChannel] }]);
         const adminChildren = guild.channels.cache.filter(c => c.parentId === adminCategory.id);
         for (const [id, channel] of adminChildren) {
           await channel.lockPermissions().catch(() => {});
         }
-      } catch (err) {
-        console.error('Impossible de sécuriser la catégorie Admin:', err);
+      } catch (err) {}
+    }
+
+    // 2. Catégorie BOOSTERS 🚀
+    const boosterRole = guild.roles.premiumSubscriberRole;
+    if (boosterRole) {
+      let boosterCategory = guild.channels.cache.find(c => c.name === '🚀 ESPACE BOOSTERS' && c.type === ChannelType.GuildCategory);
+      if (!boosterCategory) {
+        try {
+          boosterCategory = await guild.channels.create({
+            name: '🚀 ESPACE BOOSTERS',
+            type: ChannelType.GuildCategory,
+            permissionOverwrites: [
+              { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+              { id: boosterRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }
+            ]
+          });
+        } catch (err) { console.error("Erreur création catégorie booster", err); }
+      } else {
+        // Mettre à jour les permissions au cas où
+        await boosterCategory.permissionOverwrites.set([
+          { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+          { id: boosterRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }
+        ]).catch(()=>{});
+      }
+
+      if (boosterCategory) {
+        // Création des salons enfants
+        const channelsToCreate = ['💬-chat-boosters', '🤖-ia-prioritaire-boosters', '🎁-cadeaux-boosters'];
+        
+        for (const chName of channelsToCreate) {
+          let ch = guild.channels.cache.find(c => c.name === chName && c.parentId === boosterCategory.id);
+          if (!ch) {
+            ch = await guild.channels.create({
+              name: chName,
+              type: ChannelType.GuildText,
+              parent: boosterCategory.id
+            }).catch(()=>{});
+          }
+
+          // Si c'est le salon cadeaux, envoyer le PDF si pas déjà envoyé
+          if (ch && chName === '🎁-cadeaux-boosters') {
+            try {
+              const messages = await ch.messages.fetch({ limit: 10 });
+              const hasPdf = messages.some(m => m.attachments.size > 0 && m.attachments.first().name.endsWith('.pdf'));
+              if (!hasPdf && require('fs').existsSync('./50_prompts_ia.pdf')) {
+                 await ch.send({
+                   content: "🎉 **Merci infiniment pour votre Boost !** 🎉\n\nPour vous remercier de soutenir financièrement le serveur, voici un cadeau exclusif : **50 Prompts IA Avancés** pour dominer ChatGPT, Claude et Gemini.\n\n*(Nouveau : Vous avez aussi accès au salon `#🤖-ia-prioritaire-boosters` !)*",
+                   files: ['./50_prompts_ia.pdf']
+                 });
+              }
+            } catch(e) { console.error("Erreur envoi PDF", e); }
+          }
+        }
       }
     }
 
-    // 2. Création ou vérification du salon avantages-vip (Visible par TOUT LE MONDE)
+    // 3. Salon Avantages VIP public
     let avantagesChannel = guild.channels.cache.find(c => c.name.toLowerCase().includes('avantages-vip') && c.type === ChannelType.GuildText);
     if (!avantagesChannel) {
       try {
@@ -295,31 +328,22 @@ client.once('ready', async () => {
           name: '💎-avantages-vip',
           type: ChannelType.GuildText,
           permissionOverwrites: [
-            {
-              id: guild.id,
-              allow: [PermissionFlagsBits.ViewChannel],
-              deny: [PermissionFlagsBits.SendMessages], // Tout le monde voit, personne ne parle
-            }
+            { id: guild.id, allow: [PermissionFlagsBits.ViewChannel], deny: [PermissionFlagsBits.SendMessages] }
           ]
         });
         
         const embed = new EmbedBuilder()
           .setColor(0xCF6B45)
-          .setTitle('💎  AVANTAGES EXCLUSIFS VIP')
-          .setDescription("Débloquez la pleine puissance de l'Intelligence Artificielle en devenant membre Premium de Claude+. Voici vos super-pouvoirs :\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+          .setTitle('💎  AVANTAGES EXCLUSIFS VIP & BOOSTERS')
+          .setDescription("Débloquez la pleine puissance de l'Intelligence Artificielle en devenant membre Premium ou en Boostant le serveur !\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
           .addFields(
-            { name: "🎥 Résumé YouTube (`/youtube`)", value: "Faites résumer n'importe quelle longue vidéo YouTube en quelques secondes.", inline: false },
+            { name: "🚀 Avantages Serveur Booster", value: "Catégorie privée, Chat exclusif, et un Ebook PDF offert avec 50 Prompts IA de niveau expert !", inline: false },
             { name: "💻 Coach Développeur (`/code_review`)", value: "Faites analyser, débugger et corriger votre code par un CTO IA virtuel.", inline: false },
-            { name: "✍️ Copywriter Pro (`/copywriter`)", value: "Réécrivez vos brouillons en textes hypnotiques, sans fautes et professionnels.", inline: false },
-            { name: "🎨 Créateur d'Images 8K (`/imagine_pro`)", value: "Générez des images en qualité maximale sans file d'attente.", inline: false },
-            { name: "🚀 Sans Limites", value: "Vos requêtes sont prioritaires sur le serveur !", inline: false }
+            { name: "🎨 Créateur d'Images 8K (`/imagine_pro`)", value: "Générez des images en qualité maximale sans file d'attente.", inline: false }
           )
-          .setFooter({ text: "Soutenez le serveur et obtenez le rôle Premium !" });
+          .setFooter({ text: "Soutenez le serveur pour obtenir ces avantages !" });
           
         await avantagesChannel.send({ embeds: [embed] });
-      } catch (err) {
-        console.error('Impossible de créer le salon avantages VIP:', err);
-      }
     }
   }
 });
