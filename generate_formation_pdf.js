@@ -34,7 +34,7 @@ doc.rect(0, 0, doc.page.width, doc.page.height).fill('#FFFFFF');
 addTitle('Chapitre 1 : Comprendre l\'écosystème de l\'IA');
 addText("L'Intelligence Artificielle générative a bouleversé le monde. Mais pour bien l'utiliser, il faut comprendre qui fait quoi.", true);
 addText("1. ChatGPT (OpenAI) : Le pionnier et le plus polyvalent. GPT-4o est excellent pour la logique pure, le raisonnement et la création de contenu grand public. Son interface intègre la recherche web, la création d'images (DALL-E) et l'analyse de données en un seul endroit.");
-addText("2. Claude (Anthropic) : Actuellement (mi-2026), Claude 3.5 et 4.5 Sonnet sont les références mondiales pour les développeurs et les professionnels. Ils ont une plume beaucoup plus naturelle que ChatGPT (moins robotique) et sont capables de lire des centaines de pages de PDF sans perdre d'informations.");
+addText("2. Claude (Anthropic) : Actuellement, Claude 4.8 Opus et Claude Fable 5 sont les références absolues pour les développeurs seniors et les tâches d'ingénierie complexes. Ils ont une plume beaucoup plus naturelle que ChatGPT et possèdent un raisonnement analytique de pointe.");
 addText("3. Gemini (Google) : La force de Gemini 1.5 Pro et 3.1 Pro réside dans leur 'fenêtre de contexte' gigantesque (plus d'1 million de tokens). Vous pouvez lui donner 10 livres entiers ou une heure de vidéo, et il se souviendra de tout. Il est également le meilleur pour l'analyse vidéo et la recherche sur le web via Google.");
 addText("4. Midjourney & Flux : Les rois de la génération d'images. Contrairement à DALL-E qui respecte bien les consignes mais fait des images très 'lisses', Midjourney crée des œuvres d'art photoréalistes bluffantes.");
 doc.moveDown();

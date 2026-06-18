@@ -120,6 +120,58 @@ const dbPath = './database.json';
 client.once('ready', async () => {
   console.log('🤖 Mega-Bot connecté en tant que ' + client.user.tag + ' ! Prêt pour Render avec 30+ commandes.');
 
+  const guild = client.guilds.cache.first();
+  if (guild) {
+    // --- DISCORD DATABASE (Restauration & Backup Persistant) ---
+    try {
+      let adminCategory = guild.channels.cache.find(c => c.name.toLowerCase().includes('admin') && c.type === ChannelType.GuildCategory);
+      if (!adminCategory) adminCategory = await guild.channels.create({ name: '🛠️ ADMINISTRATION', type: ChannelType.GuildCategory });
+
+      let dbChannel = guild.channels.cache.find(c => c.name === '💾-database-logs');
+      if (!dbChannel) {
+        dbChannel = await guild.channels.create({
+          name: '💾-database-logs',
+          type: ChannelType.GuildText,
+          parent: adminCategory.id,
+          permissionOverwrites: [
+            { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] }
+          ]
+        });
+      }
+
+      // Restauration au démarrage
+      const messages = await dbChannel.messages.fetch({ limit: 10 });
+      const lastBackup = messages.find(m => m.attachments.size > 0 && m.attachments.first().name === 'chat_logs.json');
+      if (lastBackup && !require('fs').existsSync('./chat_logs.json')) {
+        const fetch = require('node-fetch');
+        const res = await fetch(lastBackup.attachments.first().url);
+        const data = await res.text();
+        require('fs').writeFileSync('./chat_logs.json', data);
+        console.log("💾 Base de données restaurée avec succès depuis Discord !");
+      }
+
+      // Backup automatique toutes les 2 minutes
+      setInterval(async () => {
+        if (require('fs').existsSync('./chat_logs.json')) {
+          try {
+            await dbChannel.send({
+              content: `Sauvegarde auto - ${new Date().toLocaleString()}`,
+              files: ['./chat_logs.json']
+            });
+            // Nettoyage des anciens messages pour ne pas saturer le salon
+            const allMsgs = await dbChannel.messages.fetch({ limit: 50 });
+            if (allMsgs.size > 5) {
+              const toDelete = Array.from(allMsgs.values()).slice(5);
+              await dbChannel.bulkDelete(toDelete).catch(()=>{});
+            }
+          } catch(e) {}
+        }
+      }, 2 * 60 * 1000);
+    } catch (e) {
+      console.error("Erreur Discord DB:", e);
+    }
+  }
+
   // Live Stats (Toutes les 10 minutes)
   const updateStats = async () => {
     try {
@@ -314,10 +366,11 @@ client.once('ready', async () => {
                  const filesToSend = [];
                  if (require('fs').existsSync('./50_prompts_ia.pdf')) filesToSend.push('./50_prompts_ia.pdf');
                  if (require('fs').existsSync('./Formation_Masterclass_IA.pdf')) filesToSend.push('./Formation_Masterclass_IA.pdf');
+                 if (require('fs').existsSync('./100_Methodes_Secretes_IA.pdf')) filesToSend.push('./100_Methodes_Secretes_IA.pdf');
                  
                  if (filesToSend.length > 0) {
                    await ch.send({
-                     content: "🎉 **CADEAUX EXCLUSIFS DE BOOST !** 🎉\n\nPour vous remercier de soutenir financièrement le serveur, voici vos récompenses :\n\n📚 **1. La Masterclass IA (Formation Complète)** : Découvrez comment fonctionnent les différentes IA, les secrets du Prompt Engineering, et les astuces de génération d'images.\n🔥 **2. Les 50 Méga-Prompts** : Un recueil de prompts avancés pour des projets complexes.\n\n*(Nouveau : Vous avez aussi accès au salon `#🤖-ia-prioritaire-boosters` !)*",
+                     content: "🎉 **CADEAUX EXCLUSIFS DE BOOST !** 🎉\n\nPour vous remercier de soutenir financièrement le serveur, voici vos récompenses :\n\n📚 **1. La Masterclass IA (Formation Complète)** : Découvrez comment fonctionnent les différentes IA, les secrets du Prompt Engineering, et les astuces de génération d'images.\n🔥 **2. Les 50 Méga-Prompts** : Un recueil de prompts avancés pour des projets complexes.\n💎 **3. Les 100 Méthodes Secrètes** : 100 features et tutos pratiques pour forcer l'IA à coder, rédiger et réfléchir comme un génie.\n\n*(Nouveau : Vous avez aussi accès au salon `#🤖-ia-prioritaire-boosters` !)*",
                      files: filesToSend
                    });
                  }
@@ -410,7 +463,7 @@ client.on('messageCreate', async (message) => {
           // 1. Récupération intelligente de l'historique Discord
           let history = [];
           try {
-            const messages = await message.channel.messages.fetch({ limit: 30, before: message.id });
+            const messages = await message.channel.messages.fetch({ limit: 100, before: message.id });
             const validMessages = Array.from(messages.values())
               .filter(msg => msg.author.id === userId || msg.author.id === client.user.id)
               .reverse();
