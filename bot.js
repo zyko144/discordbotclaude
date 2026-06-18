@@ -362,15 +362,49 @@ client.on('messageCreate', async (message) => {
         }
 
         // Nettoyage au cas où l'IA mettrait quand même [PRIVATE] par habitude
-        const cleanResponse = finalResponse.replace(/\[PRIVATE\]/g, '').trim();
+        let cleanResponse = finalResponse.replace(/\[PRIVATE\]/g, '').trim();
+
+        // Extraction automatique des blocs de code en fichiers pour faciliter la vie des utilisateurs
+        const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
+        let attachments = [];
+        let codeCounter = 1;
+
+        cleanResponse = cleanResponse.replace(codeBlockRegex, (fullMatch, lang, code) => {
+          const language = (lang || 'txt').toLowerCase();
+          let extension = language;
+          if (language === 'python') extension = 'py';
+          else if (language === 'javascript' || language === 'js') extension = 'js';
+          else if (language === 'typescript' || language === 'ts') extension = 'ts';
+          else if (language === 'html') extension = 'html';
+          else if (language === 'css') extension = 'css';
+          else if (language === 'json') extension = 'json';
+          else if (language === 'bash' || language === 'sh') extension = 'sh';
+          else if (language === 'markdown' || language === 'md') extension = 'md';
+          else if (!extension) extension = 'txt';
+          
+          const fileName = `code_${codeCounter}.${extension}`;
+          const buffer = Buffer.from(code.trim(), 'utf-8');
+          attachments.push(new AttachmentBuilder(buffer, { name: fileName }));
+          codeCounter++;
+          
+          return `\n📎 **[Fichier de code généré : ${fileName} - Télécharge-le ci-dessous]**\n`;
+        });
+
         const remaining = consumeQuota();
         const footer = `\n\n*⚡ ${remaining}/12000 requêtes IA restantes aujourd'hui*`;
-        const chunks = cleanResponse.match(/[\s\S]{1,1900}/g) || [];
+        const chunks = cleanResponse.match(/[\s\S]{1,1900}/g) || (cleanResponse ? [cleanResponse] : ["Voici vos fichiers :"]);
         
         for (let i = 0; i < chunks.length; i++) {
           let contentToSend = chunks[i];
           if (i === chunks.length - 1) contentToSend += footer;
-          await message.author.send(contentToSend);
+          
+          if (i === chunks.length - 1 && attachments.length > 0) {
+            // Discord limite à 10 fichiers par message maximum
+            const filesToSend = attachments.slice(0, 10);
+            await message.author.send({ content: contentToSend, files: filesToSend });
+          } else {
+            await message.author.send(contentToSend);
+          }
         }
         
         if (message.channel.type !== ChannelType.DM) {
