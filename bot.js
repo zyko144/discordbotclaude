@@ -526,7 +526,7 @@ client.on('messageCreate', async (message) => {
           }
           
           const chatSession = aiSessions.get(userId);
-          const result = await chatSession.sendMessage(message.content);
+          const result = await chatSession.sendMessage({ message: message.content });
           aiResponse = result.text;
           success = true;
           
