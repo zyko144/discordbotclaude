@@ -509,7 +509,9 @@ client.on('messageCreate', async (message) => {
 
           // Correction des alternances strictes pour l'historique de chat GenAI
           if (history.length > 0 && history[0].role === 'model') history.shift();
-          if (history.length > 0 && history[history.length - 1].role === 'user') history.pop();
+          if (history.length > 0 && history[history.length - 1].role === 'user') {
+            history.push({ role: 'model', parts: [{ text: "J'ai bien pris en compte vos précédents messages." }] });
+          }
 
           if (!aiSessions.has(userId)) {
               // GenAI unified SDK utilise client.chats.create
@@ -524,7 +526,7 @@ client.on('messageCreate', async (message) => {
           }
           
           const chatSession = aiSessions.get(userId);
-          const result = await chatSession.sendMessage({ message: message.content });
+          const result = await chatSession.sendMessage(message.content);
           aiResponse = result.text;
           success = true;
           
