@@ -6,7 +6,6 @@ const parser = new Parser();
 const discordTranscripts = require('discord-html-transcripts');
 require('dotenv').config();
 const { GoogleGenAI } = require('@google/genai');
-const fs = require('fs');
 const path = require('path');
 const { consumeQuota, getRemainingQuota } = require('./utils/quota');
 
