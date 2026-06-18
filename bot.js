@@ -26,7 +26,7 @@ function getGeminiModel() {
       try {
         const creds = JSON.parse(process.env.VERTEX_CREDENTIALS_JSON);
         vertexModelInstance = new AnthropicVertex({
-          region: 'us-central1',
+          region: 'us-east5',
           projectId: creds.project_id,
           googleAuth: new GoogleAuth({
             scopes: 'https://www.googleapis.com/auth/cloud-platform',
