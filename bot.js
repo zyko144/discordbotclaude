@@ -344,6 +344,7 @@ client.once('ready', async () => {
           .setFooter({ text: "Soutenez le serveur pour obtenir ces avantages !" });
           
         await avantagesChannel.send({ embeds: [embed] });
+      } catch (err) { console.error('Erreur VIP:', err); }
     }
   }
 });
