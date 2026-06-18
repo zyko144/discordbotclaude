@@ -6,7 +6,8 @@ const parser = new Parser();
 const discordTranscripts = require('discord-html-transcripts');
 require('dotenv').config();
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { VertexAI } = require('@google-cloud/vertexai');
+const { AnthropicVertex } = require('@anthropic-ai/vertex-sdk');
+const { GoogleAuth } = require('google-auth-library');
 const { consumeQuota, getRemainingQuota } = require('./utils/quota');
 
 let rawKeys = process.env.GEMINI_API_KEYS || '';
@@ -19,41 +20,36 @@ let vertexInitialized = false;
 function getGeminiModel() {
   const sysInstr = "Tu es l'assistant IA officiel de ce serveur Discord. Tu es poli, intelligent et rapide. Tu aides les utilisateurs dans leurs projets. RÈGLE ABSOLUE POUR LE CODE : Tu es un développeur expert, tu ne dois JAMAIS utiliser de code à trou ou de raccourcis. Ne mets jamais de commentaires comme '// suite du code' ou '...'. Tu dois OBLIGATOIREMENT écrire l'intégralité du code demandé de A à Z, sans aucune coupure, même si le code fait des centaines de lignes. IMPORTANT : Si l'utilisateur te demande de générer une image MAINTENANT, invente un prompt anglais et réponds avec `[IMAGE: ton prompt]`. Sinon, réponds normalement.";
   
-  // Priorité 1 : Vertex AI (Si le fichier JSON est fourni via Render)
+  // Priorité 1 : Vertex AI (Anthropic Claude via le fichier JSON)
   if (process.env.VERTEX_CREDENTIALS_JSON) {
     if (!vertexInitialized) {
       try {
         const creds = JSON.parse(process.env.VERTEX_CREDENTIALS_JSON);
-        const vertex_ai = new VertexAI({
-          project: creds.project_id,
-          location: 'global',
-          googleAuthOptions: {
+        vertexModelInstance = new AnthropicVertex({
+          region: 'us-central1',
+          projectId: creds.project_id,
+          googleAuth: new GoogleAuth({
             credentials: {
               client_email: creds.client_email,
               private_key: creds.private_key
             }
-          }
-        });
-        // Utilisation de .preview pour accéder aux modèles les plus récents
-        vertexModelInstance = vertex_ai.preview.getGenerativeModel({
-          model: 'gemini-3.1-pro-preview',
-          systemInstruction: sysInstr
+          })
         });
         vertexInitialized = true;
       } catch (err) {
-        console.error("Erreur d'initialisation Vertex AI:", err);
+        console.error("Erreur d'initialisation Anthropic Vertex:", err);
       }
     }
-    if (vertexModelInstance) return vertexModelInstance;
+    if (vertexModelInstance) return { type: 'claude', client: vertexModelInstance, sysInstr };
   }
 
-  // Priorité 2 : Fallback sur l'API Key classique (AI Studio)
+  // Priorité 2 : Fallback sur l'API Key classique (AI Studio / Gemini)
   if (apiKeys.length === 0) return null;
   const genAI = new GoogleGenerativeAI(apiKeys[currentKeyIndex]);
-  return genAI.getGenerativeModel({ 
+  return { type: 'gemini', client: genAI.getGenerativeModel({ 
     model: "gemini-3.1-pro-preview",
     systemInstruction: sysInstr
-  });
+  }) };
 }
 
 const aiSessions = new Map(); // userId -> chatSession
@@ -374,33 +370,39 @@ client.on('messageCreate', async (message) => {
       
       while (!success) {
         try {
-          if (!aiSessions.has(userId)) {
-            const model = getGeminiModel();
-            let history = [];
+          const aiData = getGeminiModel();
+          if (!aiData) {
+              aiResponse = "Erreur: Modèle IA indisponible.";
+              break;
+          }
+          const { type, client: model, sysInstr } = aiData;
+
+          // 1. Récupération intelligente de l'historique Discord
+          let history = [];
+          try {
+            const messages = await message.channel.messages.fetch({ limit: 30, before: message.id });
+            const validMessages = Array.from(messages.values())
+              .filter(msg => msg.author.id === userId || msg.author.id === client.user.id)
+              .reverse();
             
-            try {
-              // Récupération intelligente de l'historique Discord pour restaurer la mémoire après un redémarrage
-              const messages = await message.channel.messages.fetch({ limit: 30, before: message.id });
-              
-              // Discord renvoie du plus récent au plus ancien, on inverse pour l'ordre chronologique
-              const validMessages = Array.from(messages.values())
-                .filter(msg => msg.author.id === userId || msg.author.id === client.user.id)
-                .reverse();
-              
-              for (const msg of validMessages) {
-                let text = msg.content;
-                if (!text && msg.attachments.size > 0) {
-                  text = "[Fichier attaché envoyé]";
-                }
-                
-                // Nettoyage des balises de footer pour ne pas polluer la mémoire de l'IA
-                if (text) {
-                  text = text.replace(/\n\n\*⚡.*requêtes IA restantes aujourd'hui\*/g, '').trim();
-                  
-                  // Assurer que le texte n'est pas vide après nettoyage
-                  if (text.length > 0) {
+            for (const msg of validMessages) {
+              let text = msg.content;
+              if (!text && msg.attachments.size > 0) {
+                text = "[Fichier attaché envoyé]";
+              }
+              if (text) {
+                text = text.replace(/\n\n\*⚡.*requêtes IA restantes aujourd'hui\*/g, '').trim();
+                if (text.length > 0) {
+                  if (type === 'claude') {
+                    const role = msg.author.id === client.user.id ? 'assistant' : 'user';
+                    // Claude exige une alternance stricte
+                    if (history.length > 0 && history[history.length - 1].role === role) {
+                      history[history.length - 1].content += '\n\n' + text;
+                    } else {
+                      history.push({ role: role, content: text });
+                    }
+                  } else {
                     const role = msg.author.id === client.user.id ? "model" : "user";
-                    // Gemini exige une alternance stricte des rôles (user -> model -> user)
                     if (history.length > 0 && history[history.length - 1].role === role) {
                       history[history.length - 1].parts[0].text += '\n\n' + text;
                     } else {
@@ -409,58 +411,54 @@ client.on('messageCreate', async (message) => {
                   }
                 }
               }
-              
-              // L'API Gemini exige que l'historique commence TOUJOURS par "user"
-              if (history.length > 0 && history[0].role === 'model') {
-                history.shift();
-              }
-              // Et l'API Gemini exige que l'historique se termine par "model" (car le prochain message sera "user")
-              if (history.length > 0 && history[history.length - 1].role === 'user') {
-                history.pop();
-              }
-            } catch (err) {
-              console.error("Erreur lors de la récupération de l'historique Discord:", err);
             }
-
-            const chatSession = model.startChat({ history: history });
-            aiSessions.set(userId, chatSession);
+          } catch (err) {
+            console.error("Erreur historique:", err);
           }
-          
-          const chatSession = aiSessions.get(userId);
-          const result = await chatSession.sendMessage(message.content);
-          aiResponse = result.response.text();
-          success = true;
+
+          if (type === 'claude') {
+            // Claude API Call
+            // Claude nécessite de commencer par un user
+            if (history.length > 0 && history[0].role === 'assistant') history.shift();
+            history.push({ role: 'user', content: message.content });
+
+            const result = await model.messages.create({
+              model: 'claude-3-5-sonnet-v2@20241022',
+              system: sysInstr,
+              messages: history,
+              max_tokens: 8192
+            });
+            aiResponse = result.content[0].text;
+            success = true;
+          } else {
+            // Gemini API Call
+            if (history.length > 0 && history[0].role === 'model') history.shift();
+            if (history.length > 0 && history[history.length - 1].role === 'user') history.pop();
+            
+            if (!aiSessions.has(userId)) {
+              aiSessions.set(userId, model.startChat({ history: history }));
+            }
+            const chatSession = aiSessions.get(userId);
+            const result = await chatSession.sendMessage(message.content);
+            aiResponse = result.response.text();
+            success = true;
+          }
         } catch (apiError) {
-          console.error(`[Clé ${currentKeyIndex}] Erreur Gemini:`, apiError.message);
+          console.error(`[Clé ${currentKeyIndex}] Erreur IA:`, apiError.message);
           
-          let preservedHistory = [];
-          if (aiSessions.has(userId)) {
-            try {
-              preservedHistory = await aiSessions.get(userId).getHistory();
-            } catch (e) {}
-          }
-
-          // Si on utilise Vertex AI et que ça crashe (ex: API non activée, quota, modèle invalide)
           if (process.env.VERTEX_CREDENTIALS_JSON) {
-              success = true; // On arrête la boucle
-              aiResponse = "⚠️ **Erreur critique avec Vertex AI** : L'API Google Cloud a refusé la connexion.\n\n*Causes probables :*\n1. Tu n'as pas activé l'API Vertex AI sur Google Cloud Console.\n2. Le modèle est introuvable sur cette région.\n\n*Détail de l'erreur :* `" + apiError.message + "`";
+              success = true;
+              aiResponse = "⚠️ **Erreur critique Anthropic Vertex AI** : L'API Google Cloud a refusé la connexion.\n\n*Causes probables :*\n1. Tu n'as pas encore activé Claude 3.5 Sonnet dans le Model Garden.\n2. Ta demande d'accès est en cours de validation.\n\n*Détail de l'erreur :* `" + apiError.message + "`";
               break;
           }
 
           currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
           attempt++;
-          
-          const model = getGeminiModel();
-          if (model) {
-            const newSession = model.startChat({ history: preservedHistory });
-            aiSessions.set(userId, newSession);
-          } else {
-            aiSessions.delete(userId);
-          }
+          aiSessions.delete(userId);
           
           if (attempt >= apiKeys.length) {
-            success = true; // On arrête la boucle pour éviter de bloquer le bot
-            aiResponse = "⚠️ L'intelligence artificielle est temporairement surchargée ou une erreur de configuration est survenue. Veuillez réessayer plus tard.";
+            success = true;
+            aiResponse = "⚠️ L'intelligence artificielle est temporairement surchargée ou une erreur est survenue.";
             break;
           } else {
             await new Promise(resolve => setTimeout(resolve, 50));
