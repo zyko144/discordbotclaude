@@ -285,7 +285,7 @@ client.once('ready', async () => {
   setInterval(fetchNews, 30 * 60 * 1000);
   
   // Sécurisation de la catégorie Espace VIP & Création du salon avantages-vip
-  const guild = client.guilds.cache.first();
+  // guild is already declared above
   if (guild) {
     // 1. Catégorie PREMIUM (Espace VIP)
     let premiumRole = guild.roles.cache.find(r => r.name.toLowerCase().includes('premium') || r.name.toLowerCase().includes('vip'));
