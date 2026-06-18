@@ -359,10 +359,10 @@ client.once('ready', async () => {
           if (ch && chName === '🎁-cadeaux-boosters') {
             try {
               const messages = await ch.messages.fetch({ limit: 10 });
-              // On vérifie si la formation a déjà été envoyée
-              const hasFormation = messages.some(m => m.attachments.size > 0 && m.attachments.some(a => a.name === 'Formation_Masterclass_IA.pdf'));
+              // On vérifie si les 100 Méthodes ont déjà été envoyées
+              const hasNewBundle = messages.some(m => m.attachments.size > 0 && m.attachments.some(a => a.name === '100_Methodes_Secretes_IA.pdf'));
               
-              if (!hasFormation) {
+              if (!hasNewBundle) {
                  const filesToSend = [];
                  if (require('fs').existsSync('./50_prompts_ia.pdf')) filesToSend.push('./50_prompts_ia.pdf');
                  if (require('fs').existsSync('./Formation_Masterclass_IA.pdf')) filesToSend.push('./Formation_Masterclass_IA.pdf');
