@@ -6,18 +6,53 @@ const parser = new Parser();
 const discordTranscripts = require('discord-html-transcripts');
 require('dotenv').config();
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { VertexAI } = require('@google-cloud/vertexai');
 const { consumeQuota, getRemainingQuota } = require('./utils/quota');
 
 let rawKeys = process.env.GEMINI_API_KEYS || '';
 let apiKeys = rawKeys.split(',').map(k => k.trim()).filter(k => k.length > 0);
 let currentKeyIndex = 0;
 
+let vertexModelInstance = null;
+let vertexInitialized = false;
+
 function getGeminiModel() {
+  const sysInstr = "Tu es l'assistant IA officiel de ce serveur Discord. Tu es poli, intelligent et rapide. Tu aides les utilisateurs dans leurs projets. RÈGLE ABSOLUE POUR LE CODE : Tu es un développeur expert, tu ne dois JAMAIS utiliser de code à trou ou de raccourcis. Ne mets jamais de commentaires comme '// suite du code' ou '...'. Tu dois OBLIGATOIREMENT écrire l'intégralité du code demandé de A à Z, sans aucune coupure, même si le code fait des centaines de lignes. IMPORTANT : Si l'utilisateur te demande de générer une image MAINTENANT, invente un prompt anglais et réponds avec `[IMAGE: ton prompt]`. Sinon, réponds normalement.";
+  
+  // Priorité 1 : Vertex AI (Si le fichier JSON est fourni via Render)
+  if (process.env.VERTEX_CREDENTIALS_JSON) {
+    if (!vertexInitialized) {
+      try {
+        const creds = JSON.parse(process.env.VERTEX_CREDENTIALS_JSON);
+        const vertex_ai = new VertexAI({
+          project: creds.project_id,
+          location: 'us-central1',
+          googleAuthOptions: {
+            credentials: {
+              client_email: creds.client_email,
+              private_key: creds.private_key
+            }
+          }
+        });
+        // Utilisation de .preview pour accéder aux modèles les plus récents
+        vertexModelInstance = vertex_ai.preview.getGenerativeModel({
+          model: 'gemini-3.1-pro-preview',
+          systemInstruction: sysInstr
+        });
+        vertexInitialized = true;
+      } catch (err) {
+        console.error("Erreur d'initialisation Vertex AI:", err);
+      }
+    }
+    if (vertexModelInstance) return vertexModelInstance;
+  }
+
+  // Priorité 2 : Fallback sur l'API Key classique (AI Studio)
   if (apiKeys.length === 0) return null;
   const genAI = new GoogleGenerativeAI(apiKeys[currentKeyIndex]);
   return genAI.getGenerativeModel({ 
     model: "gemini-3.1-pro-preview",
-    systemInstruction: "Tu es l'assistant IA officiel de ce serveur Discord. Tu es poli, intelligent et rapide. Tu aides les utilisateurs dans leurs projets. RÈGLE ABSOLUE POUR LE CODE : Tu es un développeur expert, tu ne dois JAMAIS utiliser de code à trou ou de raccourcis. Ne mets jamais de commentaires comme '// suite du code' ou '...'. Tu dois OBLIGATOIREMENT écrire l'intégralité du code demandé de A à Z, sans aucune coupure, même si le code fait des centaines de lignes. IMPORTANT : Si l'utilisateur te demande de générer une image MAINTENANT, invente un prompt anglais et réponds avec `[IMAGE: ton prompt]`. Sinon, réponds normalement."
+    systemInstruction: sysInstr
   });
 }
 
