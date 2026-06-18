@@ -442,7 +442,7 @@ client.on('messageCreate', async (message) => {
           if (!aiSessions.has(userId)) {
               // GenAI unified SDK utilise client.chats.create
               const chatSession = model.chats.create({
-                  model: 'gemini-3.1-pro-preview',
+                  model: 'gemini-2.5-pro',
                   config: {
                       systemInstruction: sysInstr,
                   },
