@@ -307,15 +307,33 @@ module.exports.execute = async (interaction) => {
     
     try {
       let prompt = '';
+      let safeLink = link.startsWith('http') ? link : 'https://' + link;
+      
       try {
-        const transcriptList = await YoutubeTranscript.fetchTranscript(link);
+        const transcriptList = await YoutubeTranscript.fetchTranscript(safeLink);
         const text = transcriptList.map(t => t.text).join(' ').substring(0, 20000);
         prompt = `Voici la transcription exacte d'une vidéo YouTube :\n\n"${text}"\n\nFais-moi un résumé extrêmement détaillé et structuré avec des puces de cette vidéo. Sors les idées principales de cette transcription. Ne dis pas "voici le résumé de la transcription", agis comme si tu avais vu la vidéo.`;
       } catch (errTranscript) {
-        console.log("Transcript failed, using fallback for:", link);
-        // Fallback si la vidéo n'a pas de sous-titres ou si l'IP est bloquée
-        const res = await fetch(link);
-        const html = await res.text();
+        console.log("Transcript failed, using fallback for:", safeLink);
+        // Fallback ultra-robuste avec HTTPS natif
+        const https = require('https');
+        const html = await new Promise((resolve, reject) => {
+          https.get(safeLink, (res) => {
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+              // Gérer les redirections (ex: youtu.be)
+              https.get(res.headers.location, (res2) => {
+                let data = '';
+                res2.on('data', chunk => data += chunk);
+                res2.on('end', () => resolve(data));
+              }).on('error', reject);
+            } else {
+              let data = '';
+              res.on('data', chunk => data += chunk);
+              res.on('end', () => resolve(data));
+            }
+          }).on('error', reject);
+        });
+        
         const titleMatch = html.match(/<title>(.*?)<\/title>/);
         const descMatch = html.match(/"shortDescription":"(.*?)"/);
         
@@ -324,7 +342,7 @@ module.exports.execute = async (interaction) => {
         const title = titleMatch[1].replace(' - YouTube', '');
         const desc = descMatch ? descMatch[1].replace(/\\n/g, '\n').substring(0, 5000) : 'Aucune description.';
         
-        prompt = `Les sous-titres de cette vidéo YouTube sont bloqués ou inexistants. Voici le titre et la description de la vidéo :\n\nTitre: ${title}\nDescription: ${desc}\n\nFais-moi un résumé détaillé de ce dont parle cette vidéo uniquement à partir de ces informations. Ne mentionne pas l'absence de sous-titres.`;
+        prompt = `Les sous-titres de cette vidéo YouTube sont bloqués. Voici le titre et la description de la vidéo :\n\nTitre: ${title}\nDescription: ${desc}\n\nFais-moi un résumé détaillé de ce dont parle cette vidéo uniquement à partir de ces informations. Ne mentionne pas l'absence de sous-titres.`;
       }
       
       let response = await callVIPAI(prompt, "Tu es un assistant VIP expert en synthèse. Tu résumes les vidéos parfaitement.");
@@ -339,8 +357,8 @@ module.exports.execute = async (interaction) => {
         await interaction.channel.send(contentToSend);
       }
     } catch (e) {
-      console.error('Erreur Youtube VIP Transcript:', e);
-      await interaction.editReply("❌ Impossible d'analyser cette vidéo. Assure-toi qu'elle n'est pas restreinte.");
+      console.error('Erreur Youtube VIP Transcript:', e.message);
+      await interaction.editReply("❌ Impossible d'analyser cette vidéo. Assure-toi que le lien est correct et public.");
     }
   }
 
