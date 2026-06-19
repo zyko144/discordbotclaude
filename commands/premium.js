@@ -59,8 +59,7 @@ module.exports = [
     .setDescription('Installe le panneau des tickets')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     
-  new SlashCommandBuilder().setName('rank')
-    .setDescription('Affiche ton niveau et ton XP'),
+
     
   new SlashCommandBuilder().setName('giveaway')
     .setDescription('Lance un tirage au sort')
@@ -168,33 +167,6 @@ module.exports.execute = async (interaction) => {
     
     await interaction.channel.send({ embeds: [embed], components: [row], files: [attachment] });
     return interaction.reply({ content: '✅ Panneau de tickets installé.', ephemeral: true });
-  }
-
-  if (commandName === 'rank') {
-    const dbPath = './database.json';
-    let db = { levels: {} };
-    if (fs.existsSync(dbPath)) db = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
-    
-    const userId = interaction.user.id;
-    if (!db.levels || !db.levels[userId]) {
-      return interaction.reply({ content: "Tu n'as pas encore d'XP. Parle un peu pour en gagner !", ephemeral: true });
-    }
-    
-    const userData = db.levels[userId];
-    const nextXp = userData.level * 100;
-    
-    const rankEmbed = new EmbedBuilder()
-      .setColor(0xCF6B45)
-      .setTitle(`📊 Rang de ${interaction.user.username}`)
-      .setDescription([
-        `**Niveau :** ${userData.level}`,
-        `**XP :** ${userData.xp} / ${nextXp}`,
-        ``,
-        `Continue de participer pour monter en niveau !`
-      ].join('\n'))
-      .setThumbnail(interaction.user.displayAvatarURL());
-      
-    return interaction.reply({ embeds: [rankEmbed] });
   }
 
   if (commandName === 'giveaway') {
