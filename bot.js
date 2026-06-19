@@ -328,7 +328,7 @@ client.once('ready', async () => {
           { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] }
         ];
         if (premiumRole) {
-          overwrites.push({ id: premiumRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] });
+          overwrites.push({ id: premiumRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.UseApplicationCommands] });
         }
         await premiumCategory.permissionOverwrites.set(overwrites);
         const children = guild.channels.cache.filter(c => c.parentId === premiumCategory.id);
