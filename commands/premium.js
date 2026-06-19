@@ -77,9 +77,10 @@ module.exports = [
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(opt => opt.setName('message_id').setDescription('ID du message du giveaway').setRequired(true)),
     
-  new SlashCommandBuilder().setName('youtube')
-    .setDescription('💎 VIP: Résume une vidéo YouTube')
-    .addStringOption(opt => opt.setName('lien').setDescription('Lien de la vidéo YouTube').setRequired(true)),
+  new SlashCommandBuilder().setName('viral_post')
+    .setDescription('💎 VIP: Génère un post ultra-viral pour les réseaux sociaux')
+    .addStringOption(opt => opt.setName('sujet').setDescription('Le sujet du post').setRequired(true))
+    .addStringOption(opt => opt.setName('reseau').setDescription('Twitter, LinkedIn ou Instagram ?').setRequired(true)),
     
   new SlashCommandBuilder().setName('code_review')
     .setDescription('💎 VIP: Corrige et explique ton code')
@@ -272,65 +273,36 @@ module.exports.execute = async (interaction) => {
 
   // --- COMMANDES VIP IA ---
 
-  if (commandName === 'youtube') {
-    if (!checkVIP(interaction)) return interaction.reply({ content: "❌ Cette commande est réservée aux membres Premium/VIP !", ephemeral: true });
-    await interaction.deferReply();
-    const link = options.getString('lien');
+  if (commandName === 'viral_post') {
+    if (!checkVIP(interaction)) {
+      return interaction.reply({ content: "💎 **Accès refusé.** Cette commande est réservée aux membres VIP.", ephemeral: true });
+    }
     
+    await interaction.deferReply();
+    const sujet = options.getString('sujet');
+    const reseau = options.getString('reseau');
+    
+    const prompt = `Agis comme un copywriter expert de la Silicon Valley spécialisé dans la viralité algorithmique.
+Ton objectif est de créer un post extrêmement viral pour le réseau social suivant : ${reseau}.
+Le sujet de ce post est : ${sujet}.
+
+Utilise les meilleures pratiques pour ce réseau spécifique (hooks accrocheurs, espaces, émojis pertinents, appel à l'action, hashtags si nécessaire).
+Le post doit capter l'attention dans la première phrase et forcer l'engagement.`;
+
     try {
-      let prompt = '';
-      let safeLink = link.startsWith('http') ? link : 'https://' + link;
-      
-      try {
-        const transcriptList = await YoutubeTranscript.fetchTranscript(safeLink);
-        const text = transcriptList.map(t => t.text).join(' ').substring(0, 20000);
-        prompt = `Voici la transcription exacte d'une vidéo YouTube :\n\n"${text}"\n\nFais-moi un résumé extrêmement détaillé et structuré avec des puces de cette vidéo. Sors les idées principales de cette transcription. Ne dis pas "voici le résumé de la transcription", agis comme si tu avais vu la vidéo.`;
-      } catch (errTranscript) {
-        console.log("Transcript failed, using fallback for:", safeLink);
-        
-        let meta = await new Promise((resolve) => {
-            let targetUrl = safeLink;
-            if (safeLink.includes('youtu.be/')) {
-              const videoId = safeLink.split('/').pop().split('?')[0];
-              if (videoId) {
-                targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
-              }
-            }
-
-            const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(targetUrl)}&format=json`;
-            const https = require('https');
-
-            https.get(oembedUrl, (res) => {
-              let data = '';
-              res.on('data', chunk => { data += chunk; });
-              res.on('end', () => {
-                try {
-                  const json = JSON.parse(data);
-                  resolve({ title: json.title || 'Titre introuvable', desc: `Auteur: ${json.author_name || 'Inconnu'}` });
-                } catch (e) {
-                  resolve({ title: 'Aucun titre', desc: 'Aucune description' });
-                }
-              });
-            }).on('error', () => resolve({ title: 'Aucun titre', desc: 'Aucune description' }));
-        });
-
-        prompt = `Les sous-titres de cette vidéo YouTube sont bloqués. Voici les seules informations disponibles :\n\nTitre: ${meta.title}\nDescription: ${meta.desc}\n\nFais-moi un résumé détaillé de ce dont pourrait parler cette vidéo à partir de ces informations. Ne mentionne pas l'absence de sous-titres.`;
-      }
-      
-      let response = await callVIPAI(prompt, "Tu es un assistant VIP expert en synthèse. Tu résumes les vidéos parfaitement.");
+      let response = await callVIPAI(prompt, "Tu es un Copywriter Expert. Tu crées du contenu viral garanti.");
       const remaining = consumeQuota();
       const footer = `\n\n*⚡ ${remaining}/12000 requêtes IA restantes aujourd'hui*`;
       
       const chunks = response.match(/[\s\S]{1,1900}/g) || [];
-      await interaction.editReply("🎥 **Voici l'analyse de la vidéo :**");
+      await interaction.editReply(`🚀 **Voici ton post viral pour ${reseau} :**`);
       for (let i = 0; i < chunks.length; i++) {
         let contentToSend = chunks[i];
         if (i === chunks.length - 1) contentToSend += footer;
         await interaction.channel.send(contentToSend);
       }
-    } catch (e) {
-      console.error('Erreur Youtube VIP Transcript:', e.message);
-      await interaction.editReply("❌ Impossible d'analyser cette vidéo. Erreur technique : " + e.message);
+    } catch (error) {
+      await interaction.editReply(`❌ Impossible de générer le post. Erreur technique : ${error.message}`);
     }
   }
 
