@@ -68,6 +68,11 @@ module.exports = [
     .addIntegerOption(opt => opt.setName('temps').setDescription('Temps en minutes').setRequired(true))
     .addStringOption(opt => opt.setName('lot').setDescription('Le lot à gagner').setRequired(true)),
     
+  new SlashCommandBuilder().setName('endgiveaway')
+    .setDescription('Termine manuellement un giveaway et tire un gagnant')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addStringOption(opt => opt.setName('message_id').setDescription('ID du message du giveaway').setRequired(true)),
+    
   new SlashCommandBuilder().setName('youtube')
     .setDescription('💎 VIP: Résume une vidéo YouTube')
     .addStringOption(opt => opt.setName('lien').setDescription('Lien de la vidéo YouTube').setRequired(true)),
@@ -235,6 +240,42 @@ module.exports.execute = async (interaction) => {
         console.error('Erreur Giveaway', e);
       }
     }, timeInMinutes * 60000);
+  }
+
+  if (commandName === 'endgiveaway') {
+    await interaction.deferReply({ ephemeral: true });
+    const msgId = options.getString('message_id');
+    try {
+      const fetchedMsg = await interaction.channel.messages.fetch(msgId);
+      let participants = (client.giveaways && client.giveaways[msgId]) ? client.giveaways[msgId] : [];
+      
+      // Fallback: Si la mémoire a été vidée (restart) et qu'il n'y a personne en RAM
+      if (participants.length === 0) {
+        const members = await interaction.guild.members.fetch();
+        const ROLE_NOUVEAU = '1516710281919729705';
+        participants = members.filter(m => !m.user.bot && m.roles.cache.has(ROLE_NOUVEAU)).map(m => m.user.id);
+      }
+
+      if (participants.length === 0) {
+        await interaction.editReply({ content: 'Personne pour gagner...' });
+        return;
+      }
+
+      const winner = participants[Math.floor(Math.random() * participants.length)];
+      await interaction.channel.send(`🎉 Félicitations <@${winner}> ! Tu as gagné le giveaway (tirage officiel) !`);
+      
+      const endEmbed = EmbedBuilder.from(fetchedMsg.embeds[0])
+        .setTitle('🎉 GIVEAWAY TERMINÉ 🎉')
+        .setDescription(`**Gagnant :** <@${winner}>\n\n*(Le bot a inclus tous les membres vérifiés pour compenser le redémarrage)*`)
+        .setColor(0x2B2D31);
+      
+      await fetchedMsg.edit({ embeds: [endEmbed], components: [] }).catch(() => {});
+      if (client.giveaways && client.giveaways[msgId]) delete client.giveaways[msgId];
+      
+      await interaction.editReply({ content: '✅ Giveaway terminé avec succès.' });
+    } catch(e) {
+      await interaction.editReply({ content: '❌ Erreur: ' + e.message });
+    }
   }
 
   // --- COMMANDES VIP IA ---
