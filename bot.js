@@ -793,6 +793,19 @@ client.on('interactionCreate', async interaction => {
           }
         }
         
+        // VÉRIFICATION DES INVITATIONS OBLIGATOIRE
+        const invites = await interaction.guild.invites.fetch();
+        let hasInvited = false;
+        invites.forEach(inv => {
+          if (inv.inviter && inv.inviter.id === interaction.user.id && inv.uses > 0) {
+            hasInvited = true;
+          }
+        });
+
+        if (!hasInvited) {
+          return interaction.reply({ content: '❌ **Accès refusé :** Tu dois inviter au moins **1 ami** sur le serveur (via ton propre lien) pour pouvoir participer au giveaway !', ephemeral: true });
+        }
+
         const participants = client.giveaways[interaction.message.id];
         if (!participants.includes(interaction.user.id)) {
           participants.push(interaction.user.id);
@@ -807,7 +820,7 @@ client.on('interactionCreate', async interaction => {
              if (participantList.length > 1000) {
                  participantList = participantList.substring(0, 1000) + '... et bien d\'autres !';
              }
-             embed.setDescription(`${baseDesc}**👥 Participants (${participants.length}) :**\n${participantList}`);
+             embed.setDescription(`${baseDesc}**👥 Participants (${participants.length}) :**\n${participantList}\n\n*(Nettoyage auto : seuls les membres ayant invité au moins 1 personne sont autorisés)*`);
              await interaction.message.edit({ embeds: [embed] });
           }
 
