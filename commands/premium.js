@@ -30,7 +30,7 @@ async function callVIPAI(prompt, systemInstruction) {
   }
   
   console.error("VIP AI Error: Toutes les clés ont échoué.", lastError);
-  throw new Error("Toutes les clés API sont actuellement épuisées ou surchargées.");
+  throw new Error("Toutes les clés API sont actuellement épuisées ou surchargées. Raison : " + (lastError ? lastError.message : 'Inconnue'));
 }
 
 function checkVIP(interaction) {
