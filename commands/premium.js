@@ -358,7 +358,7 @@ module.exports.execute = async (interaction) => {
       }
     } catch (e) {
       console.error('Erreur Youtube VIP Transcript:', e.message);
-      await interaction.editReply("❌ Impossible d'analyser cette vidéo. Assure-toi que le lien est correct et public.");
+      await interaction.editReply("❌ Impossible d'analyser cette vidéo. Erreur technique : " + e.message);
     }
   }
 
