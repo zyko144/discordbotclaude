@@ -779,7 +779,19 @@ client.on('interactionCreate', async interaction => {
     try {
       if (interaction.customId === 'join_giveaway') {
         if (!client.giveaways) client.giveaways = {};
-        if (!client.giveaways[interaction.message.id]) client.giveaways[interaction.message.id] = [];
+        if (!client.giveaways[interaction.message.id]) {
+          client.giveaways[interaction.message.id] = [];
+          
+          // Tenter de récupérer les anciens depuis la description (survie au restart !)
+          const existingEmbed = interaction.message.embeds[0];
+          if (existingEmbed && existingEmbed.description) {
+            const matches = existingEmbed.description.match(/<@(\d+)>/g);
+            if (matches) {
+              const ids = matches.map(m => m.replace('<@', '').replace('>', ''));
+              client.giveaways[interaction.message.id] = [...new Set(ids)];
+            }
+          }
+        }
         
         const participants = client.giveaways[interaction.message.id];
         if (!participants.includes(interaction.user.id)) {
