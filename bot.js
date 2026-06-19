@@ -736,21 +736,6 @@ client.on('messageCreate', async (message) => {
     return; // Stop here if it was a banned message
   }
 
-  // Anti-ping Staff in Tickets
-  if (message.channel.name.startsWith('ticket-') && !message.author.bot) {
-    if (message.mentions.users.size > 0 || message.mentions.roles.size > 0) {
-      const warnEmbed = new EmbedBuilder()
-        .setColor(0xFF0000)
-        .setTitle('⚠️  Prévention Anti-Ping')
-        .setDescription([
-          "Merci de ne pas mentionner le Staff dans les tickets.",
-          "Une alerte automatique a déjà été envoyée lors de l'ouverture du salon.",
-          "",
-          "**Veuillez patienter, nous répondrons dès que possible.**"
-        ].join('\n'));
-      await message.channel.send({ content: "<@" + message.author.id + ">", embeds: [warnEmbed] });
-    }
-  }
 
 
 });
