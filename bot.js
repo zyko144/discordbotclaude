@@ -677,34 +677,7 @@ client.on('messageCreate', async (message) => {
   if (!db.warnings) db.warnings = {};
   if (!db.levels) db.levels = {};
 
-  // --- Leveling System ---
-  const userId = message.author.id;
-  if (!db.levels[userId]) {
-    db.levels[userId] = { xp: 0, level: 1, lastMessageTime: 0 };
-  }
 
-  const now = Date.now();
-  // Cooldown de 60 secondes pour gagner de l'XP
-  if (now - db.levels[userId].lastMessageTime > 60000) {
-    const xpGained = Math.floor(Math.random() * 11) + 15; // 15 à 25 XP
-    db.levels[userId].xp += xpGained;
-    db.levels[userId].lastMessageTime = now;
-
-    const nextLevelXp = db.levels[userId].level * 100;
-    if (db.levels[userId].xp >= nextLevelXp) {
-      db.levels[userId].level += 1;
-      db.levels[userId].xp -= nextLevelXp; // Keep leftover XP
-      
-      const levelUpEmbed = new EmbedBuilder()
-        .setColor(0xCF6B45)
-        .setTitle('🎉 Montée en Niveau !')
-        .setDescription(`Félicitations <@${userId}>, tu viens d'atteindre le **Niveau ${db.levels[userId].level}** !`);
-      
-      await message.channel.send({ embeds: [levelUpEmbed] }).catch(() => {});
-    }
-    
-    fs.writeFileSync(dbPath, JSON.stringify(db, null, 2));
-  }
 
 
 
