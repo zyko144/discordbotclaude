@@ -306,18 +306,33 @@ module.exports.execute = async (interaction) => {
     const link = options.getString('lien');
     
     try {
-      // On récupère les sous-titres de la vidéo pour donner le vrai contexte à l'IA
-      const transcriptList = await YoutubeTranscript.fetchTranscript(link);
-      const text = transcriptList.map(t => t.text).join(' ').substring(0, 20000); // 20000 caractères max pour rester dans la limite des tokens
-      
-      const prompt = `Voici la transcription exacte d'une vidéo YouTube :\n\n"${text}"\n\nFais-moi un résumé extrêmement détaillé et structuré avec des puces de cette vidéo. Sors les idées principales de cette transcription. Ne dis pas "voici le résumé de la transcription", agis comme si tu avais vu la vidéo.`;
+      let prompt = '';
+      try {
+        const transcriptList = await YoutubeTranscript.fetchTranscript(link);
+        const text = transcriptList.map(t => t.text).join(' ').substring(0, 20000);
+        prompt = `Voici la transcription exacte d'une vidéo YouTube :\n\n"${text}"\n\nFais-moi un résumé extrêmement détaillé et structuré avec des puces de cette vidéo. Sors les idées principales de cette transcription. Ne dis pas "voici le résumé de la transcription", agis comme si tu avais vu la vidéo.`;
+      } catch (errTranscript) {
+        console.log("Transcript failed, using fallback for:", link);
+        // Fallback si la vidéo n'a pas de sous-titres ou si l'IP est bloquée
+        const res = await fetch(link);
+        const html = await res.text();
+        const titleMatch = html.match(/<title>(.*?)<\/title>/);
+        const descMatch = html.match(/"shortDescription":"(.*?)"/);
+        
+        if (!titleMatch) throw new Error("Impossible de lire la vidéo");
+        
+        const title = titleMatch[1].replace(' - YouTube', '');
+        const desc = descMatch ? descMatch[1].replace(/\\n/g, '\n').substring(0, 5000) : 'Aucune description.';
+        
+        prompt = `Les sous-titres de cette vidéo YouTube sont bloqués ou inexistants. Voici le titre et la description de la vidéo :\n\nTitre: ${title}\nDescription: ${desc}\n\nFais-moi un résumé détaillé de ce dont parle cette vidéo uniquement à partir de ces informations. Ne mentionne pas l'absence de sous-titres.`;
+      }
       
       let response = await callVIPAI(prompt, "Tu es un assistant VIP expert en synthèse. Tu résumes les vidéos parfaitement.");
       const remaining = consumeQuota();
       const footer = `\n\n*⚡ ${remaining}/12000 requêtes IA restantes aujourd'hui*`;
       
       const chunks = response.match(/[\s\S]{1,1900}/g) || [];
-      await interaction.editReply("🎥 **Voici le résumé détaillé de la vidéo :**");
+      await interaction.editReply("🎥 **Voici l'analyse de la vidéo :**");
       for (let i = 0; i < chunks.length; i++) {
         let contentToSend = chunks[i];
         if (i === chunks.length - 1) contentToSend += footer;
@@ -325,7 +340,7 @@ module.exports.execute = async (interaction) => {
       }
     } catch (e) {
       console.error('Erreur Youtube VIP Transcript:', e);
-      await interaction.editReply("❌ Impossible d'analyser cette vidéo. Assure-toi qu'elle a des sous-titres ou qu'elle n'est pas restreinte.");
+      await interaction.editReply("❌ Impossible d'analyser cette vidéo. Assure-toi qu'elle n'est pas restreinte.");
     }
   }
 
