@@ -73,6 +73,11 @@ module.exports = [
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(opt => opt.setName('message_id').setDescription('ID du message du giveaway').setRequired(true)),
     
+  new SlashCommandBuilder().setName('reroll')
+    .setDescription('Tire un nouveau gagnant pour un giveaway terminé')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addStringOption(opt => opt.setName('message_id').setDescription('ID du message du giveaway').setRequired(true)),
+    
   new SlashCommandBuilder().setName('youtube')
     .setDescription('💎 VIP: Résume une vidéo YouTube')
     .addStringOption(opt => opt.setName('lien').setDescription('Lien de la vidéo YouTube').setRequired(true)),
@@ -242,37 +247,47 @@ module.exports.execute = async (interaction) => {
     }, timeInMinutes * 60000);
   }
 
-  if (commandName === 'endgiveaway') {
+  if (commandName === 'endgiveaway' || commandName === 'reroll') {
     await interaction.deferReply({ ephemeral: true });
     const msgId = options.getString('message_id');
     try {
       const fetchedMsg = await interaction.channel.messages.fetch(msgId);
       let participants = (client.giveaways && client.giveaways[msgId]) ? client.giveaways[msgId] : [];
       
-      // Fallback: Si la mémoire a été vidée (restart) et qu'il n'y a personne en RAM
-      if (participants.length === 0) {
-        const members = await interaction.guild.members.fetch();
-        const ROLE_NOUVEAU = '1516710281919729705';
-        participants = members.filter(m => !m.user.bot && m.roles.cache.has(ROLE_NOUVEAU)).map(m => m.user.id);
+      // Fallback ou Reroll : on cherche tous les membres éligibles (>= 1 invite)
+      if (participants.length === 0 || commandName === 'reroll') {
+        const invites = await interaction.guild.invites.fetch();
+        const eligibleUsers = new Set();
+        invites.forEach(inv => {
+            if(inv.inviter && !inv.inviter.bot && inv.uses > 0) {
+                eligibleUsers.add(inv.inviter.id);
+            }
+        });
+        participants = Array.from(eligibleUsers);
       }
 
       if (participants.length === 0) {
-        await interaction.editReply({ content: 'Personne pour gagner...' });
+        await interaction.editReply({ content: '❌ Personne n\'est éligible (0 membre avec au moins 1 invitation).' });
         return;
       }
 
       const winner = participants[Math.floor(Math.random() * participants.length)];
-      await interaction.channel.send(`🎉 Félicitations <@${winner}> ! Tu as gagné le giveaway (tirage officiel) !`);
+      
+      if (commandName === 'reroll') {
+        await interaction.channel.send(`🎉 REROLL ! Félicitations <@${winner}> ! Tu es le nouveau gagnant du giveaway !`);
+      } else {
+        await interaction.channel.send(`🎉 Félicitations <@${winner}> ! Tu as gagné le giveaway (tirage officiel) !`);
+      }
       
       const endEmbed = EmbedBuilder.from(fetchedMsg.embeds[0])
         .setTitle('🎉 GIVEAWAY TERMINÉ 🎉')
-        .setDescription(`**Gagnant :** <@${winner}>\n\n*(Le bot a inclus tous les membres vérifiés pour compenser le redémarrage)*`)
+        .setDescription(`**Gagnant :** <@${winner}>\n\n*(Tirage 100% sécurisé : seules les personnes avec ≥ 1 invitation ont été prises en compte)*`)
         .setColor(0x2B2D31);
       
       await fetchedMsg.edit({ embeds: [endEmbed], components: [] }).catch(() => {});
       if (client.giveaways && client.giveaways[msgId]) delete client.giveaways[msgId];
       
-      await interaction.editReply({ content: '✅ Giveaway terminé avec succès.' });
+      await interaction.editReply({ content: `✅ ${commandName === 'reroll' ? 'Reroll effectué' : 'Giveaway terminé'} avec succès.` });
     } catch(e) {
       await interaction.editReply({ content: '❌ Erreur: ' + e.message });
     }
