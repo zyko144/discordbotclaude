@@ -315,34 +315,34 @@ module.exports.execute = async (interaction) => {
         prompt = `Voici la transcription exacte d'une vidéo YouTube :\n\n"${text}"\n\nFais-moi un résumé extrêmement détaillé et structuré avec des puces de cette vidéo. Sors les idées principales de cette transcription. Ne dis pas "voici le résumé de la transcription", agis comme si tu avais vu la vidéo.`;
       } catch (errTranscript) {
         console.log("Transcript failed, using fallback for:", safeLink);
-        // Fallback ultra-robuste avec HTTPS natif
-        const https = require('https');
-        const html = await new Promise((resolve, reject) => {
-          https.get(safeLink, (res) => {
-            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-              // Gérer les redirections (ex: youtu.be)
-              https.get(res.headers.location, (res2) => {
-                let data = '';
-                res2.on('data', chunk => data += chunk);
-                res2.on('end', () => resolve(data));
-              }).on('error', reject);
-            } else {
-              let data = '';
-              res.on('data', chunk => data += chunk);
-              res.on('end', () => resolve(data));
+        
+        let meta = await new Promise((resolve) => {
+            let targetUrl = safeLink;
+            if (safeLink.includes('youtu.be/')) {
+              const videoId = safeLink.split('/').pop().split('?')[0];
+              if (videoId) {
+                targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
+              }
             }
-          }).on('error', reject);
+
+            const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(targetUrl)}&format=json`;
+            const https = require('https');
+
+            https.get(oembedUrl, (res) => {
+              let data = '';
+              res.on('data', chunk => { data += chunk; });
+              res.on('end', () => {
+                try {
+                  const json = JSON.parse(data);
+                  resolve({ title: json.title || 'Titre introuvable', desc: `Auteur: ${json.author_name || 'Inconnu'}` });
+                } catch (e) {
+                  resolve({ title: 'Aucun titre', desc: 'Aucune description' });
+                }
+              });
+            }).on('error', () => resolve({ title: 'Aucun titre', desc: 'Aucune description' }));
         });
-        
-        const titleMatch = html.match(/<title>(.*?)<\/title>/);
-        const descMatch = html.match(/"shortDescription":"(.*?)"/);
-        
-        if (!titleMatch) throw new Error("Impossible de lire la vidéo");
-        
-        const title = titleMatch[1].replace(' - YouTube', '');
-        const desc = descMatch ? descMatch[1].replace(/\\n/g, '\n').substring(0, 5000) : 'Aucune description.';
-        
-        prompt = `Les sous-titres de cette vidéo YouTube sont bloqués. Voici le titre et la description de la vidéo :\n\nTitre: ${title}\nDescription: ${desc}\n\nFais-moi un résumé détaillé de ce dont parle cette vidéo uniquement à partir de ces informations. Ne mentionne pas l'absence de sous-titres.`;
+
+        prompt = `Les sous-titres de cette vidéo YouTube sont bloqués. Voici les seules informations disponibles :\n\nTitre: ${meta.title}\nDescription: ${meta.desc}\n\nFais-moi un résumé détaillé de ce dont pourrait parler cette vidéo à partir de ces informations. Ne mentionne pas l'absence de sous-titres.`;
       }
       
       let response = await callVIPAI(prompt, "Tu es un assistant VIP expert en synthèse. Tu résumes les vidéos parfaitement.");
