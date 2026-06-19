@@ -19,7 +19,7 @@ async function callVIPAI(prompt, systemInstruction) {
     const keyIndex = (startIndex + i) % apiKeys.length;
     try {
       const genAI = new GoogleGenerativeAI(apiKeys[keyIndex]);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash", systemInstruction });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro", systemInstruction });
       const result = await model.generateContent(prompt);
       return result.response.text();
     } catch (e) {
