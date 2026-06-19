@@ -282,12 +282,23 @@ module.exports.execute = async (interaction) => {
     const sujet = options.getString('sujet');
     const reseau = options.getString('reseau');
     
-    const prompt = `Agis comme un copywriter expert de la Silicon Valley spécialisé dans la viralité algorithmique.
-Ton objectif est de créer un post extrêmement viral pour le réseau social suivant : ${reseau}.
-Le sujet de ce post est : ${sujet}.
+    const prompt = `Agis comme un Copywriter d'élite de la Silicon Valley, spécialisé dans la psychologie humaine et la viralité algorithmique.
+Ton objectif strict est de rédiger un post EXTRÊMEMENT VIRAL et UNIQUE pour ${reseau}.
+Sujet : "${sujet}"
+Facteur d'unicité (pour garantir un post différent à chaque fois) : ${Math.random().toString(36).substring(2)}
 
-Utilise les meilleures pratiques pour ce réseau spécifique (hooks accrocheurs, espaces, émojis pertinents, appel à l'action, hashtags si nécessaire).
-Le post doit capter l'attention dans la première phrase et forcer l'engagement.`;
+Règles impératives :
+- NE SOIS PAS CLICHÉ ou "robotique". Ne commence surtout pas par "Voici..." ou "Découvrez...".
+- La 1ère ligne DOIT être un "Hook" (accroche) agressif, émotionnel ou contre-intuitif qui stoppe net le scroll.
+- Le rythme doit être dynamique : phrases courtes, beaucoup de sauts de ligne, aération visuelle parfaite.
+- Adapte parfaitement le ton au réseau choisi : 
+  - Twitter/X : Punchy, tranchant, droit au but.
+  - LinkedIn : Storytelling captivant, structure "Problème -> Leçon -> Solution".
+  - Instagram : Fun, esthétique, engageant.
+- Ajoute 3 à 4 emojis bien placés (n'en abuse pas).
+- Termine par un "Call-to-Action" (CTA) irrésistible qui oblige psychologiquement les gens à commenter.
+
+Génère un angle totalement inattendu et créatif. Fais-moi une masterclass de copywriting.`;
 
     try {
       let response = await callVIPAI(prompt, "Tu es un Copywriter Expert. Tu crées du contenu viral garanti.");
