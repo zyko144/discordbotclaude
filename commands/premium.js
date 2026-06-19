@@ -231,7 +231,10 @@ module.exports.execute = async (interaction) => {
           return;
         }
         
-        const winner = participants[Math.floor(Math.random() * participants.length)];
+        const validParticipants = participants.filter(id => id !== interaction.user.id);
+        const finalPool = validParticipants.length > 0 ? validParticipants : participants;
+        const winner = finalPool[Math.floor(Math.random() * finalPool.length)];
+        
         await interaction.channel.send(`🎉 Félicitations <@${winner}> ! Tu as gagné le giveaway pour : **${prize}** !`);
         
         const endEmbed = EmbedBuilder.from(fetchedMsg.embeds[0])
@@ -271,7 +274,9 @@ module.exports.execute = async (interaction) => {
         return;
       }
 
-      const winner = participants[Math.floor(Math.random() * participants.length)];
+      const validParticipants = participants.filter(id => id !== interaction.user.id);
+      const finalPool = validParticipants.length > 0 ? validParticipants : participants;
+      const winner = finalPool[Math.floor(Math.random() * finalPool.length)];
       
       if (commandName === 'reroll') {
         await interaction.channel.send(`🎉 REROLL ! Félicitations <@${winner}> ! Tu es le nouveau gagnant du giveaway !`);
