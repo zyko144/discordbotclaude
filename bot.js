@@ -219,42 +219,52 @@ client.once('ready', async () => {
       }
 
       // Restauration au démarrage
-      const messages = await dbChannel.messages.fetch({ limit: 10 });
-      const lastBackup = messages.find(m => m.attachments.size > 0 && m.attachments.first().name === 'chat_logs.json');
+      const messages = await dbChannel.messages.fetch({ limit: 20 });
+      const lastBackup = messages.find(m => m.attachments.size > 0 && m.content.includes('Sauvegarde auto'));
       if (lastBackup) {
         try {
-          const res = await fetch(lastBackup.attachments.first().url);
-          const data = await res.text();
-          
-          let existingData = {};
-          if (require('fs').existsSync('./chat_logs.json')) {
-            try { existingData = JSON.parse(require('fs').readFileSync('./chat_logs.json', 'utf8')); } catch(e){}
+          for (const attachment of lastBackup.attachments.values()) {
+              if (attachment.name === 'chat_logs.json') {
+                  const res = await fetch(attachment.url);
+                  const data = await res.text();
+                  let existingData = {};
+                  if (require('fs').existsSync('./chat_logs.json')) {
+                    try { existingData = JSON.parse(require('fs').readFileSync('./chat_logs.json', 'utf8')); } catch(e){}
+                  }
+                  const backupData = JSON.parse(data);
+                  for (const key in backupData) {
+                     if (!existingData[key]) existingData[key] = backupData[key];
+                     else {
+                       const existingIds = new Set(existingData[key].messages.map(m => m.timestamp));
+                       backupData[key].messages.forEach(m => {
+                         if (!existingIds.has(m.timestamp)) existingData[key].messages.push(m);
+                       });
+                       existingData[key].messages.sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+                     }
+                  }
+                  require('fs').writeFileSync('./chat_logs.json', JSON.stringify(existingData, null, 2));
+              } else if (attachment.name === 'database.json') {
+                  const res = await fetch(attachment.url);
+                  const data = await res.text();
+                  // For database.json, just overwrite to restore exact state (news, invites, warns)
+                  require('fs').writeFileSync('./database.json', data);
+              }
           }
-          const backupData = JSON.parse(data);
-          
-          // Fusionner les données pour ne perdre ni le backup, ni les nouveaux messages reçus pendant le boot
-          for (const key in backupData) {
-             if (!existingData[key]) existingData[key] = backupData[key];
-             else {
-               const existingIds = new Set(existingData[key].messages.map(m => m.timestamp));
-               backupData[key].messages.forEach(m => {
-                 if (!existingIds.has(m.timestamp)) existingData[key].messages.push(m);
-               });
-               existingData[key].messages.sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
-             }
-          }
-          require('fs').writeFileSync('./chat_logs.json', JSON.stringify(existingData, null, 2));
-          console.log("💾 Base de données restaurée et fusionnée avec succès depuis Discord !");
+          console.log("💾 Bases de données (Chat + DB Principale) restaurées avec succès depuis Discord !");
         } catch(e) { console.error("Erreur téléchargement DB:", e); }
       }
 
-      // Backup automatique toutes les 2 minutes
+      // Backup automatique toutes les 24 heures
       setInterval(async () => {
-        if (require('fs').existsSync('./chat_logs.json')) {
+        let filesToBackup = [];
+        if (require('fs').existsSync('./chat_logs.json')) filesToBackup.push('./chat_logs.json');
+        if (require('fs').existsSync('./database.json')) filesToBackup.push('./database.json');
+        
+        if (filesToBackup.length > 0) {
           try {
             await dbChannel.send({
               content: `Sauvegarde auto - ${new Date().toLocaleString()}`,
-              files: ['./chat_logs.json']
+              files: filesToBackup
             });
             // Nettoyage des anciens messages pour ne pas saturer le salon
             const allMsgs = await dbChannel.messages.fetch({ limit: 50 });
@@ -264,7 +274,7 @@ client.once('ready', async () => {
             }
           } catch(e) {}
         }
-      }, 2 * 60 * 1000);
+      }, 24 * 60 * 60 * 1000);
     } catch (e) {
       console.error("Erreur Discord DB:", e);
     }
@@ -1142,6 +1152,20 @@ async function announceDowntime() {
             if (!channel) channel = guild.channels.cache.find(c => c.name.toLowerCase().includes('général') || c.name.toLowerCase().includes('general'));
             if (channel) {
                 await channel.send('⚠️ **MAINTENANCE AUTO** : Le bot doit redémarrer pour une mise à jour système ou une maintenance côté hébergeur. \n\n*Ne paniquez pas, nous serons de retour dans quelques instants avec encore plus de puissance ! 🚀*').catch(()=>{});
+            }
+            
+            // Force a final DB backup before dying to ensure no data loss
+            let dbChannel = guild.channels.cache.find(c => c.name === '💾-database-logs');
+            if (dbChannel) {
+                let filesToBackup = [];
+                if (require('fs').existsSync('./chat_logs.json')) filesToBackup.push('./chat_logs.json');
+                if (require('fs').existsSync('./database.json')) filesToBackup.push('./database.json');
+                if (filesToBackup.length > 0) {
+                    await dbChannel.send({
+                        content: `Sauvegarde auto (Arrêt du système) - ${new Date().toLocaleString()}`,
+                        files: filesToBackup
+                    }).catch(()=>{});
+                }
             }
         }
     } catch(e) {}
