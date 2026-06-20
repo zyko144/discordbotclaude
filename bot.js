@@ -519,7 +519,18 @@ client.on('messageCreate', async (message) => {
       db.invite_history = [];
       db.invite_warns = {};
       require('fs').writeFileSync(dbPath, JSON.stringify(db, null, 2));
-      return message.reply("✅ Les classements des invitations et les historiques ont été réinitialisés avec succès pour le nouveau Giveaway !");
+
+      try {
+          const invites = await message.guild.invites.fetch();
+          let count = 0;
+          for (const invite of invites.values()) {
+              await invite.delete();
+              count++;
+          }
+          return message.reply(`✅ Classements réinitialisés avec succès ! J'ai supprimé **${count}** liens d'invitation pour forcer la remise à zéro du \`/top\`.`);
+      } catch(err) {
+          return message.reply("✅ L'historique local a été vidé. Mais ❌ impossible de supprimer les invitations Discord (vérifie ma permission *Gérer le serveur*).");
+      }
   }
   if (message.author.bot) return;
 
