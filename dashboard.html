@@ -1,328 +1,306 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Claude+ | Logs IA</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg-dark: #0D0D0D;
-      --bg-sidebar: #161616;
-      --bg-card: #202020;
-      --primary: #CF6B45;
-      --primary-hover: #e57e55;
-      --text-main: #F5F0EB;
-      --text-muted: #A0A0A0;
-      --bubble-user: #CF6B45;
-      --bubble-bot: #2A2A2A;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discord - Tableau de Bord des Invitations</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-color: #0f1115;
+            --card-bg: #1a1d24;
+            --accent: #5865F2;
+            --accent-hover: #4752C4;
+            --text-main: #ffffff;
+            --text-muted: #a3a6aa;
+            --border: #2f333c;
+            --gold: #FFD700;
+            --silver: #C0C0C0;
+            --bronze: #CD7F32;
+        }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
 
-    body {
-      font-family: 'Inter', sans-serif;
-      background-color: var(--bg-dark);
-      color: var(--text-main);
-      display: flex;
-      height: 100vh;
-      overflow: hidden;
-    }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+        }
 
-    /* SIDEBAR */
-    .sidebar {
-      width: 320px;
-      background-color: var(--bg-sidebar);
-      border-right: 1px solid #333;
-      display: flex;
-      flex-direction: column;
-    }
+        .header {
+            background: linear-gradient(180deg, rgba(88, 101, 242, 0.15) 0%, rgba(15, 17, 21, 0) 100%);
+            padding: 4rem 2rem 2rem;
+            text-align: center;
+            border-bottom: 1px solid var(--border);
+        }
 
-    .sidebar-header {
-      padding: 24px;
-      border-bottom: 1px solid #333;
-    }
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
 
-    .sidebar-header h1 {
-      font-size: 1.5rem;
-      font-weight: 700;
-      color: var(--primary);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    .sidebar-header p {
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      margin-top: 5px;
-    }
+        .header h1 i {
+            color: var(--accent);
+            margin-right: 10px;
+        }
 
-    .user-list {
-      flex: 1;
-      overflow-y: auto;
-      padding: 12px;
-    }
+        .header p {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
 
-    .user-item {
-      padding: 16px;
-      margin-bottom: 8px;
-      border-radius: 12px;
-      background-color: transparent;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 3rem 2rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
 
-    .user-item:hover, .user-item.active {
-      background-color: var(--bg-card);
-    }
-    .user-item.active {
-      border-left: 4px solid var(--primary);
-    }
+        @media (max-width: 900px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
 
-    .user-avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background-color: #333;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      color: var(--primary);
-      font-size: 1.2rem;
-    }
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            padding: 2rem;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+        }
 
-    .user-info h3 {
-      font-size: 1rem;
-      font-weight: 600;
-    }
-    .user-info p {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      margin-top: 4px;
-    }
+        .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
 
-    /* MAIN CHAT AREA */
-    .chat-area {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      background-color: var(--bg-dark);
-      background-image: radial-gradient(circle at center, rgba(207, 107, 69, 0.05) 0%, transparent 70%);
-    }
+        .card-header h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
 
-    .chat-header {
-      padding: 24px;
-      border-bottom: 1px solid #333;
-      background-color: rgba(22, 22, 22, 0.8);
-      backdrop-filter: blur(10px);
-    }
+        .card-header i {
+            font-size: 1.5rem;
+            margin-right: 12px;
+            color: var(--accent);
+        }
 
-    .chat-header h2 {
-      font-size: 1.4rem;
-      font-weight: 600;
-    }
+        .list {
+            list-style: none;
+        }
 
-    .messages {
-      flex: 1;
-      padding: 30px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
+        .list-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem;
+            border-radius: 8px;
+            background-color: rgba(255,255,255,0.02);
+            margin-bottom: 0.5rem;
+            transition: transform 0.2s, background-color 0.2s;
+        }
 
-    .empty-state {
-      margin: auto;
-      text-align: center;
-      color: var(--text-muted);
-    }
-    .empty-state h2 { font-size: 1.5rem; color: var(--primary); margin-bottom: 10px; }
+        .list-item:hover {
+            transform: translateX(5px);
+            background-color: rgba(255,255,255,0.05);
+        }
 
-    /* CHAT BUBBLES */
-    .msg-wrapper {
-      display: flex;
-      flex-direction: column;
-      max-width: 75%;
-    }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
 
-    .msg-wrapper.user {
-      align-self: flex-end;
-      align-items: flex-end;
-    }
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: var(--text-muted);
+        }
 
-    .msg-wrapper.bot {
-      align-self: flex-start;
-      align-items: flex-start;
-    }
+        .details h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
 
-    .msg-bubble {
-      padding: 14px 20px;
-      border-radius: 20px;
-      font-size: 0.95rem;
-      line-height: 1.5;
-      white-space: pre-wrap;
-    }
+        .details p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
 
-    .msg-wrapper.user .msg-bubble {
-      background-color: var(--bubble-user);
-      color: white;
-      border-bottom-right-radius: 4px;
-    }
+        .stat-badge {
+            background-color: var(--accent);
+            color: white;
+            padding: 0.4rem 0.8rem;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
 
-    .msg-wrapper.bot .msg-bubble {
-      background-color: var(--bubble-bot);
-      border-bottom-left-radius: 4px;
-      border: 1px solid #333;
-    }
+        .rank-1 .stat-badge { background-color: var(--gold); color: #000; }
+        .rank-2 .stat-badge { background-color: var(--silver); color: #000; }
+        .rank-3 .stat-badge { background-color: var(--bronze); color: #fff; }
 
-    .msg-time {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      margin-top: 6px;
-      margin-bottom: 2px;
-    }
+        .loader {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+        }
 
-    /* SCROLLBAR */
-    ::-webkit-scrollbar { width: 8px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
-
-  </style>
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-muted);
+        }
+        
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+    </style>
 </head>
 <body>
 
-  <div class="sidebar">
-    <div class="sidebar-header">
-      <h1>Claude+ Logs</h1>
-      <p id="stats-text">Chargement des données...</p>
+    <div class="header">
+        <h1><i class="fa-solid fa-users"></i> Tableau de Bord des Invitations</h1>
+        <p>Suivez en temps réel l'évolution de la communauté</p>
     </div>
-    <div class="user-list" id="user-list">
-      <!-- Users will be injected here -->
-    </div>
-  </div>
 
-  <div class="chat-area">
-    <div class="chat-header" id="chat-header" style="display: none;">
-      <h2 id="chat-title">Utilisateur</h2>
-    </div>
-    <div class="messages" id="messages-container">
-      <div class="empty-state">
-        <h2>Bienvenue sur le Dashboard</h2>
-        <p>Sélectionnez un utilisateur à gauche pour inspecter ses conversations avec l'IA.</p>
-      </div>
-    </div>
-  </div>
+    <div class="container">
+        <!-- Leaderboard -->
+        <div class="card">
+            <div class="card-header">
+                <i class="fa-solid fa-trophy"></i>
+                <h2>Le Podium (Top Recruteurs)</h2>
+            </div>
+            <ul class="list" id="leaderboard-list">
+                <div class="loader">Chargement du classement...</div>
+            </ul>
+        </div>
 
-  <script>
-    let logsData = {};
-    let currentUserId = null;
+        <!-- Historique -->
+        <div class="card">
+            <div class="card-header">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+                <h2>Historique Détaillé (Derniers Arrivés)</h2>
+            </div>
+            <ul class="list" id="history-list">
+                <div class="loader">Chargement de l'historique...</div>
+            </ul>
+        </div>
+    </div>
 
-    async function fetchLogs() {
-      try {
-        const response = await fetch('/api/logs');
-        logsData = await response.json();
-        renderUserList();
-        if (currentUserId && logsData[currentUserId]) {
-          renderChat(currentUserId, false);
+    <script>
+        async function fetchData() {
+            try {
+                const response = await fetch('/api/invites');
+                const data = await response.json();
+                
+                renderLeaderboard(data.leaderboard);
+                renderHistory(data.history);
+            } catch (error) {
+                console.error("Erreur lors de la récupération des données:", error);
+                document.getElementById('leaderboard-list').innerHTML = '<div class="empty-state">Erreur de connexion au serveur Discord.</div>';
+                document.getElementById('history-list').innerHTML = '<div class="empty-state">Erreur de connexion au serveur Discord.</div>';
+            }
         }
-      } catch (err) {
-        console.error("Erreur API:", err);
-        document.getElementById('stats-text').innerText = "Erreur de connexion API";
-      }
-    }
 
-    function renderUserList() {
-      const userIds = Object.keys(logsData);
-      document.getElementById('stats-text').innerText = `${userIds.length} membre(s) loggé(s)`;
-      
-      const listContainer = document.getElementById('user-list');
-      listContainer.innerHTML = '';
+        function renderLeaderboard(leaderboard) {
+            const list = document.getElementById('leaderboard-list');
+            list.innerHTML = '';
 
-      // Trier par date du dernier message (le plus récent en premier)
-      userIds.sort((a, b) => {
-        const timeA = new Date(logsData[a].messages[logsData[a].messages.length - 1].timestamp).getTime();
-        const timeB = new Date(logsData[b].messages[logsData[b].messages.length - 1].timestamp).getTime();
-        return timeB - timeA;
-      });
+            if (!leaderboard || leaderboard.length === 0) {
+                list.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fa-solid fa-ghost"></i>
+                        <p>Aucune invitation pour le moment.</p>
+                    </div>`;
+                return;
+            }
 
-      userIds.forEach(id => {
-        const user = logsData[id];
-        const lastMsgTime = new Date(user.messages[user.messages.length - 1].timestamp);
-        
-        const div = document.createElement('div');
-        div.className = 'user-item';
-        if (currentUserId === id) div.classList.add('active');
-        
-        div.onclick = () => {
-          document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active'));
-          div.classList.add('active');
-          renderChat(id, true);
-        };
+            leaderboard.forEach((user, index) => {
+                const rankClass = index < 3 ? \`rank-\${index + 1}\` : '';
+                const initial = user.username ? user.username.charAt(0).toUpperCase() : '?';
+                
+                list.innerHTML += \`
+                    <li class="list-item \${rankClass}">
+                        <div class="user-info">
+                            <div class="avatar">\${initial}</div>
+                            <div class="details">
+                                <h3>\${user.username}</h3>
+                                <p>Recruteur Officiel</p>
+                            </div>
+                        </div>
+                        <div class="stat-badge">\${user.uses} invites</div>
+                    </li>
+                \`;
+            });
+        }
 
-        const initial = user.username.charAt(0).toUpperCase();
+        function renderHistory(history) {
+            const list = document.getElementById('history-list');
+            list.innerHTML = '';
 
-        div.innerHTML = `
-          <div class="user-avatar">${initial}</div>
-          <div class="user-info">
-            <h3>${user.username}</h3>
-            <p>${user.messages.length} msg(s) • ${lastMsgTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-          </div>
-        `;
-        listContainer.appendChild(div);
-      });
-    }
+            if (!history || history.length === 0) {
+                list.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fa-solid fa-clock"></i>
+                        <p>L'historique commence à s'enregistrer maintenant.</p>
+                        <p style="font-size: 0.8rem; margin-top: 10px;">Les prochaines arrivées s'afficheront ici.</p>
+                    </div>`;
+                return;
+            }
 
-    function renderChat(userId, scroll) {
-      currentUserId = userId;
-      const user = logsData[userId];
-      document.getElementById('chat-header').style.display = 'block';
-      document.getElementById('chat-title').innerText = `Conversation avec ${user.username}`;
-      
-      const container = document.getElementById('messages-container');
-      
-      // Store current scroll position to see if we were at the bottom
-      const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 50;
-      
-      container.innerHTML = '';
+            // Inverser pour avoir les plus récents en haut
+            const reversedHistory = [...history].reverse();
+            reversedHistory.forEach(entry => {
+                const date = new Date(entry.timestamp).toLocaleString('fr-FR', {
+                    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+                });
+                
+                list.innerHTML += \`
+                    <li class="list-item">
+                        <div class="user-info">
+                            <div class="avatar" style="background-color: var(--accent); color: white;">
+                                <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                            </div>
+                            <div class="details">
+                                <h3>\${entry.invitedUsername}</h3>
+                                <p>Invité(e) par <strong>\${entry.inviterUsername}</strong></p>
+                            </div>
+                        </div>
+                        <div style="font-size: 0.8rem; color: var(--text-muted);">
+                            \${date}
+                        </div>
+                    </li>
+                \`;
+            });
+        }
 
-      user.messages.forEach(msg => {
-        const wrapper = document.createElement('div');
-        wrapper.className = `msg-wrapper ${msg.role === 'user' ? 'user' : 'bot'}`;
-        
-        const date = new Date(msg.timestamp);
-        const timeStr = date.toLocaleDateString() + ' à ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-
-        wrapper.innerHTML = `
-          <div class="msg-bubble">${escapeHTML(msg.content)}</div>
-          <div class="msg-time">${msg.role === 'user' ? user.username : 'Claude+ IA'} • ${timeStr}</div>
-        `;
-        container.appendChild(wrapper);
-      });
-
-      if (scroll || isAtBottom) {
-        container.scrollTop = container.scrollHeight;
-      }
-    }
-
-    function escapeHTML(str) {
-      return str.replace(/[&<>'"]/g, 
-        tag => ({
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            "'": '&#39;',
-            '"': '&quot;'
-        }[tag] || tag)
-      );
-    }
-
-    // Refresh automatically every 3 seconds for near real-time tracking
-    fetchLogs();
-    setInterval(fetchLogs, 3000);
-  </script>
+        // Rafraîchir toutes les 15 secondes
+        fetchData();
+        setInterval(fetchData, 15000);
+    </script>
 </body>
 </html>

@@ -54,9 +54,41 @@ const activeTicketCreations = new Set(); // Prevent double-click ticket race con
 
 // --- SERVER EXPRESS (Keep-Alive pour Render) ---
 const app = express();
-app.get('/', (req, res) => res.send('Bot is running 24/7!'));
+app.get('/', (req, res) => res.sendFile(require('path').resolve('./dashboard.html')));
 
-// --- DASHBOARD ROUTING ---
+app.get('/api/invites', async (req, res) => {
+  const guild = client.guilds.cache.first();
+  if (!guild) return res.json({ leaderboard: [], history: [] });
+  
+  try {
+    const invites = await guild.invites.fetch();
+    const rawLeaderboard = invites
+      .filter(i => i.uses > 0 && i.inviter)
+      .map(i => ({ username: i.inviter.username, uses: i.uses }));
+      
+    const map = new Map();
+    for (const item of rawLeaderboard) {
+      map.set(item.username, (map.get(item.username) || 0) + item.uses);
+    }
+    
+    const mergedLeaderboard = [];
+    map.forEach((uses, username) => mergedLeaderboard.push({ username, uses }));
+    mergedLeaderboard.sort((a, b) => b.uses - a.uses);
+
+    const dbPath = './database.json';
+    let history = [];
+    if (fs.existsSync(dbPath)) {
+       const db = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+       history = db.invite_history || [];
+    }
+    
+    res.json({ leaderboard: mergedLeaderboard.slice(0, 10), history: history.slice(-50) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- API LOGS ---
 app.get('/api/logs', (req, res) => {
   const logFile = './chat_logs.json';
   if (fs.existsSync(logFile)) {
@@ -943,6 +975,22 @@ client.on('guildMemberAdd', async member => {
     if (oldInvites) {
       usedInvite = newInvites.find(i => i.uses > (oldInvites.get(i.code) || 0));
       newInvites.forEach(invite => oldInvites.set(invite.code, invite.uses));
+    }
+    
+    if (usedInvite && usedInvite.inviter) {
+       const dbPath = './database.json';
+       if (fs.existsSync(dbPath)) {
+          const db = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+          if (!db.invite_history) db.invite_history = [];
+          db.invite_history.push({
+             invitedUsername: member.user.username,
+             invitedId: member.user.id,
+             inviterUsername: usedInvite.inviter.username,
+             inviterId: usedInvite.inviter.id,
+             timestamp: Date.now()
+          });
+          fs.writeFileSync(dbPath, JSON.stringify(db, null, 2));
+       }
     }
 
     let welcomeChannel = member.guild.channels.cache.find(c => c.name === '👋-bienvenue');
