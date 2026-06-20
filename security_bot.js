@@ -374,6 +374,22 @@ client.once('ready', async () => {
             options: [
                 { name: 'nombre', description: 'Nombre de messages à supprimer (max 100)', type: 4, required: true }
             ]
+        },
+        {
+            name: 'blacklistgiveaway',
+            description: 'Bannir définitivement un membre des Giveaways.',
+            default_member_permissions: String(PermissionFlagsBits.Administrator),
+            options: [
+                { name: 'utilisateur', description: 'Le membre à bannir des giveaways', type: 6, required: true }
+            ]
+        },
+        {
+            name: 'unbangiveaway',
+            description: 'Débannir un membre des Giveaways.',
+            default_member_permissions: String(PermissionFlagsBits.Administrator),
+            options: [
+                { name: 'utilisateur', description: 'Le membre à débannir des giveaways', type: 6, required: true }
+            ]
         }];
         await client.application.commands.set(commands);
         console.log("🛡️  Slash commands de sécurité enregistrées avec succès.");
@@ -718,6 +734,345 @@ client.on('messageCreate', async message => {
             const spamMsgs = messagesToDelete.filter(m => m.author.id === authorId);
             await message.channel.bulkDelete(spamMsgs);
         } catch(e) {}
+    }
+});
+
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isChatInputCommand()) return;
+
+    const { commandName, options, guild, member, user } = interaction;
+
+    // Check permissions (all of these commands are admin-only)
+    if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
+        return interaction.reply({ content: "❌ Seuls les administrateurs peuvent utiliser cette commande.", ephemeral: true });
+    }
+
+    try {
+        if (commandName === 'repondre') {
+            await interaction.deferReply({ ephemeral: true });
+            const targetUser = options.getUser('utilisateur');
+            const replyMessage = options.getString('message');
+
+            try {
+                await targetUser.send(`🛡️ **Message de l'Équipe de Sécurité** :\n\n${replyMessage}`);
+                
+                // Log it so it appears on the dashboard
+                const logEntry = {
+                    id: Date.now(),
+                    userId: targetUser.id,
+                    username: targetUser.tag,
+                    avatar: targetUser.displayAvatarURL({ dynamic: true, size: 64 }),
+                    content: `(Admin Reply) ${replyMessage}`,
+                    channel: 'DM (Admin -> User)',
+                    time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+                };
+                if (typeof logToDashboard === 'function') logToDashboard('dm', logEntry);
+                
+                await interaction.editReply({ content: `✅ Ton message a bien été envoyé en Privé à **${targetUser.username}** !` });
+            } catch (e) {
+                console.error(e);
+                await interaction.editReply({ content: `❌ Impossible d'envoyer un message privé à **${targetUser.username}**. Ses DMs sont probablement fermés.` });
+            }
+        }
+        else if (commandName === 'ban') {
+            await interaction.deferReply({ ephemeral: false });
+            const targetUser = options.getUser('utilisateur');
+            const reason = options.getString('raison') || 'Aucune raison spécifiée';
+            const targetMember = guild.members.cache.get(targetUser.id) || await guild.members.fetch(targetUser.id).catch(()=>null);
+
+            if (!targetMember) {
+                return interaction.editReply({ content: "❌ Utilisateur introuvable sur le serveur." });
+            }
+            if (!targetMember.bannable) {
+                return interaction.editReply({ content: "❌ Je ne peux pas bannir cet utilisateur (permissions insuffisantes)." });
+            }
+
+            await targetMember.ban({ reason: `Banni par ${user.tag} : ${reason}` });
+            
+            const db = getDb();
+            if (!db.security_logs) db.security_logs = [];
+            const logEntry = { type: 'BAN', date: new Date().toISOString(), user: targetUser.tag, reason };
+            db.security_logs.push(logEntry);
+            saveDb(db);
+            io.emit('securityAlert', logEntry);
+
+            await interaction.editReply({ content: `🛡️ **${targetUser.tag}** a été banni du serveur.\n**Motif :** ${reason}` });
+        }
+        else if (commandName === 'kick') {
+            await interaction.deferReply({ ephemeral: false });
+            const targetUser = options.getUser('utilisateur');
+            const reason = options.getString('raison') || 'Aucune raison spécifiée';
+            const targetMember = guild.members.cache.get(targetUser.id) || await guild.members.fetch(targetUser.id).catch(()=>null);
+
+            if (!targetMember) {
+                return interaction.editReply({ content: "❌ Utilisateur introuvable sur le serveur." });
+            }
+            if (!targetMember.kickable) {
+                return interaction.editReply({ content: "❌ Je ne peux pas expulser cet utilisateur (permissions insuffisantes)." });
+            }
+
+            await targetMember.kick(`Expulsé par ${user.tag} : ${reason}`);
+
+            const db = getDb();
+            if (!db.security_logs) db.security_logs = [];
+            const logEntry = { type: 'KICK', date: new Date().toISOString(), user: targetUser.tag, reason };
+            db.security_logs.push(logEntry);
+            saveDb(db);
+            io.emit('securityAlert', logEntry);
+
+            await interaction.editReply({ content: `🛡️ **${targetUser.tag}** a été expulsé du serveur.\n**Motif :** ${reason}` });
+        }
+        else if (commandName === 'quarantine') {
+            await interaction.deferReply({ ephemeral: false });
+            const targetUser = options.getUser('utilisateur');
+            const reason = options.getString('raison') || 'Aucune raison spécifiée';
+            const targetMember = guild.members.cache.get(targetUser.id) || await guild.members.fetch(targetUser.id).catch(()=>null);
+
+            if (!targetMember) {
+                return interaction.editReply({ content: "❌ Utilisateur introuvable sur le serveur." });
+            }
+
+            await targetMember.roles.set([]); // Remove all roles
+
+            const db = getDb();
+            if (!db.security_logs) db.security_logs = [];
+            const logEntry = { type: 'QUARANTAINE', date: new Date().toISOString(), user: targetUser.tag, reason };
+            db.security_logs.push(logEntry);
+            saveDb(db);
+            io.emit('securityAlert', logEntry);
+
+            await interaction.editReply({ content: `🛡️ **${targetUser.tag}** a été mis en quarantaine (tous ses rôles ont été retirés).\n**Motif :** ${reason}` });
+        }
+        else if (commandName === 'warn') {
+            await interaction.deferReply({ ephemeral: false });
+            const targetUser = options.getUser('utilisateur');
+            const reason = options.getString('raison');
+
+            const db = getDb();
+            if (!db.invite_warns) db.invite_warns = {};
+            if (!db.security_logs) db.security_logs = [];
+
+            db.invite_warns[targetUser.id] = (db.invite_warns[targetUser.id] || 0) + 1;
+            const warns = db.invite_warns[targetUser.id];
+            
+            const logEntry = {
+                type: 'WARN',
+                date: new Date().toISOString(),
+                user: targetUser.tag,
+                reason: reason + ` (Avertissement ${warns}/3)`
+            };
+            db.security_logs.push(logEntry);
+            saveDb(db);
+            io.emit('securityAlert', logEntry);
+
+            try {
+                if (warns >= 3) {
+                    const targetMember = guild.members.cache.get(targetUser.id) || await guild.members.fetch(targetUser.id).catch(()=>null);
+                    await targetUser.send(`🚫 **BANNISSEMENT** : Vous avez été banni du serveur car vous avez atteint 3 avertissements (Motif : ${reason}).`).catch(()=>{});
+                    if (targetMember && targetMember.bannable) {
+                        await targetMember.ban({ reason: `3 avertissements atteints (Dernier motif : ${reason})` });
+                    }
+                    io.emit('securityAlert', { type: 'BAN', target: targetUser.tag, reason: '3 avertissements atteints.' });
+                    await interaction.editReply({ content: `🛡️ **${targetUser.tag}** a été banni définitivement car il a atteint 3 avertissements.\n**Dernier motif :** ${reason}` });
+                } else {
+                    await targetUser.send(`⚠️ **AVERTISSEMENT SÉCURITÉ (${warns}/3)** : Vous avez reçu un avertissement sur le serveur.\n**Motif :** ${reason}`).catch(()=>{});
+                    await interaction.editReply({ content: `🛡️ **${targetUser.tag}** a été averti (${warns}/3).\n**Motif :** ${reason}` });
+                }
+            } catch (err) {
+                console.error(err);
+                await interaction.editReply({ content: `🛡️ **${targetUser.tag}** a été averti (${warns}/3) mais ses DMs sont fermés.\n**Motif :** ${reason}` });
+            }
+        }
+        else if (commandName === 'clear') {
+            await interaction.deferReply({ ephemeral: true });
+            const amount = options.getInteger('nombre');
+
+            if (amount < 1 || amount > 100) {
+                return interaction.editReply({ content: "❌ Le nombre de messages doit être compris entre 1 et 100." });
+            }
+
+            const deleted = await interaction.channel.bulkDelete(amount, true);
+            await interaction.editReply({ content: `✅ **${deleted.size}** messages ont été supprimés !` });
+        }
+        else if (commandName === 'blacklistgiveaway') {
+            await interaction.deferReply({ ephemeral: false });
+            const targetUser = options.getUser('utilisateur');
+
+            const db = getDb();
+            if (!db.giveaway_blacklist) db.giveaway_blacklist = [];
+            
+            if (!db.giveaway_blacklist.includes(targetUser.id)) {
+                db.giveaway_blacklist.push(targetUser.id);
+                saveDb(db);
+            }
+
+            // Remove user from the current giveaways in cache & embeds
+            const mainClient = global.mainBotClient;
+            if (mainClient) {
+                for (const ch of guild.channels.cache.values()) {
+                    if (!ch.isTextBased()) continue;
+                    try {
+                        const messages = await ch.messages.fetch({ limit: 30 }).catch(() => new Map());
+                        for (const msg of messages.values()) {
+                            if (msg.components && msg.components.length > 0 && msg.components[0].components.length > 0 && msg.components[0].components[0].customId === 'join_giveaway') {
+                                if (!mainClient.giveaways) mainClient.giveaways = {};
+                                let participants = mainClient.giveaways[msg.id] || [];
+                                
+                                const embed = EmbedBuilder.from(msg.embeds[0]);
+                                let desc = embed.data.description || "";
+                                const baseDescIndex = desc.indexOf('**👥 Participants');
+                                
+                                if (baseDescIndex !== -1) {
+                                    if (participants.length === 0) {
+                                        const matches = desc.match(/<@(\d+)>/g);
+                                        if (matches) participants = matches.map(m => m.replace('<@', '').replace('>', ''));
+                                    }
+                                    participants = participants.filter(id => id !== targetUser.id);
+                                    mainClient.giveaways[msg.id] = participants;
+                                    
+                                    let participantList = participants.map(id => `<@${id}>`).join(', ');
+                                    if (participantList.length > 1000) participantList = participantList.substring(0, 1000) + '... et bien d\'autres !';
+                                    
+                                    const baseDesc = desc.substring(0, baseDescIndex);
+                                    embed.setDescription(`${baseDesc}**👥 Participants (${participants.length}) :**\n${participantList}\n\n*(Nettoyage auto : seuls les membres ayant invité au moins 1 personne sont autorisés. ⚠️ Les Doubles Comptes (DC) = BAN DIRECT !)*`);
+                                    await msg.edit({ embeds: [embed] }).catch(()=>{});
+                                }
+                            }
+                        }
+                    } catch(e){}
+                }
+            }
+
+            await interaction.editReply({ content: `🛡️ **${targetUser.tag}** a été banni de tous les Giveaways.` });
+        }
+        else if (commandName === 'unbangiveaway') {
+            await interaction.deferReply({ ephemeral: false });
+            const targetUser = options.getUser('utilisateur');
+
+            const db = getDb();
+            if (!db.giveaway_blacklist) db.giveaway_blacklist = [];
+            
+            db.giveaway_blacklist = db.giveaway_blacklist.filter(id => id !== targetUser.id);
+            saveDb(db);
+
+            await interaction.editReply({ content: `✅ **${targetUser.tag}** a été débanni des Giveaways. Il peut à nouveau participer.` });
+        }
+        else if (commandName === 'kickdc') {
+            await interaction.deferReply({ ephemeral: false });
+            const dcUser = options.getUser('double_compte');
+            const mainUser = options.getUser('compte_principal');
+
+            // 1. Kick the DC
+            const dcMember = guild.members.cache.get(dcUser.id) || await guild.members.fetch(dcUser.id).catch(()=>null);
+            if (dcMember && dcMember.kickable) {
+                await dcMember.kick("Double Compte identifié (Triche Giveaway)").catch(()=>{});
+            }
+
+            // 2. Warn the main account
+            const db = getDb();
+            if (!db.invite_warns) db.invite_warns = {};
+            if (!db.security_logs) db.security_logs = [];
+            if (!db.giveaway_blacklist) db.giveaway_blacklist = [];
+
+            db.invite_warns[mainUser.id] = (db.invite_warns[mainUser.id] || 0) + 1;
+            const warns = db.invite_warns[mainUser.id];
+
+            // Blacklist from giveaways immediately
+            if (!db.giveaway_blacklist.includes(mainUser.id)) {
+                db.giveaway_blacklist.push(mainUser.id);
+            }
+
+            const logEntry = {
+                type: 'ALT_ACCOUNT_KICK_DC',
+                date: new Date().toISOString(),
+                inviter: mainUser.tag,
+                inviterId: mainUser.id,
+                altAccount: dcUser.tag,
+                altId: dcUser.id,
+                reason: `Double Compte expulsé. Compte principal averti (${warns}/3) et banni des Giveaways.`
+            };
+            db.security_logs.push(logEntry);
+            saveDb(db);
+            io.emit('securityAlert', logEntry);
+
+            // Delete all invite links generated by the cheater
+            try {
+                const allInvites = await guild.invites.fetch();
+                let deletedCount = 0;
+                for (const inv of allInvites.values()) {
+                    if (inv.inviter && inv.inviter.id === mainUser.id) {
+                        await inv.delete();
+                        deletedCount++;
+                    }
+                }
+                console.log(`Supprimé ${deletedCount} invitations pour ${mainUser.tag}`);
+            } catch(e) {
+                console.error("Erreur suppression invitations:", e);
+            }
+
+            // Remove main account from active giveaways using mainClient
+            const mainClient = global.mainBotClient;
+            if (mainClient) {
+                for (const ch of guild.channels.cache.values()) {
+                    if (!ch.isTextBased()) continue;
+                    try {
+                        const messages = await ch.messages.fetch({ limit: 30 }).catch(() => new Map());
+                        for (const msg of messages.values()) {
+                            if (msg.components && msg.components.length > 0 && msg.components[0].components.length > 0 && msg.components[0].components[0].customId === 'join_giveaway') {
+                                if (!mainClient.giveaways) mainClient.giveaways = {};
+                                let participants = mainClient.giveaways[msg.id] || [];
+                                
+                                const embed = EmbedBuilder.from(msg.embeds[0]);
+                                let desc = embed.data.description || "";
+                                const baseDescIndex = desc.indexOf('**👥 Participants');
+                                
+                                if (baseDescIndex !== -1) {
+                                    if (participants.length === 0) {
+                                        const matches = desc.match(/<@(\d+)>/g);
+                                        if (matches) participants = matches.map(m => m.replace('<@', '').replace('>', ''));
+                                    }
+                                    participants = participants.filter(id => id !== mainUser.id);
+                                    mainClient.giveaways[msg.id] = participants;
+                                    
+                                    let participantList = participants.map(id => `<@${id}>`).join(', ');
+                                    if (participantList.length > 1000) participantList = participantList.substring(0, 1000) + '... et bien d\'autres !';
+                                    
+                                    const baseDesc = desc.substring(0, baseDescIndex);
+                                    embed.setDescription(`${baseDesc}**👥 Participants (${participants.length}) :**\n${participantList}\n\n*(Nettoyage auto : seuls les membres ayant invité au moins 1 personne sont autorisés. ⚠️ Les Doubles Comptes (DC) = BAN DIRECT !)*`);
+                                    await msg.edit({ embeds: [embed] }).catch(()=>{});
+                                }
+                            }
+                        }
+                    } catch(e){}
+                }
+            }
+
+            // Send notification messages and handle 3-strike ban
+            try {
+                if (warns >= 3) {
+                    const mainMember = guild.members.cache.get(mainUser.id) || await guild.members.fetch(mainUser.id).catch(()=>null);
+                    await mainUser.send(`🚫 **BANNISSEMENT** : Vous avez été banni définitivement du serveur car vous avez atteint 3 avertissements pour triche (Double Comptes).`).catch(()=>{});
+                    if (mainMember && mainMember.bannable) {
+                        await mainMember.ban({ reason: "Triche massive aux invitations (3 doubles comptes détectés)" });
+                    }
+                    io.emit('securityAlert', { type: 'BAN', target: mainUser.tag, reason: '3 avertissements de triche (DC).' });
+                    await interaction.editReply({ content: `🛡️ **Action effectuée :**\n- Double compte \`${dcUser.tag}\` expulsé.\n- Compte principal \`${mainUser.tag}\` **BANNI DÉFINITIVEMENT** du serveur (3/3 avertissements).\n- Toutes ses invitations ont été supprimées.` });
+                } else {
+                    await mainUser.send(`⚠️ **AVERTISSEMENT SÉCURITÉ (${warns}/3) & EXCLUSION GIVEAWAY** : Le compte \`${dcUser.tag}\` que vous avez invité a été identifié comme votre double compte. Il a été expulsé, vos invitations supprimées, et vous avez été **banni définitivement des Giveaways**. Au bout de 3 avertissements, vous serez banni du serveur.`).catch(()=>{});
+                    await interaction.editReply({ content: `🛡️ **Action effectuée :**\n- Double compte \`${dcUser.tag}\` expulsé.\n- Compte principal \`${mainUser.tag}\` averti (**${warns}/3**) et banni définitivement des Giveaways.\n- Toutes ses invitations ont été supprimées de Discord.` });
+                }
+            } catch(err) {
+                console.error(err);
+                await interaction.editReply({ content: `🛡️ **Action effectuée :**\n- Double compte \`${dcUser.tag}\` expulsé.\n- Compte principal \`${mainUser.tag}\` averti (**${warns}/3**) (DMs fermés) et banni des Giveaways.\n- Invitations supprimées.` });
+            }
+        }
+    } catch (error) {
+        console.error("Erreur exécution commande de sécurité :", error);
+        if (interaction.deferred || interaction.replied) {
+            await interaction.editReply({ content: "❌ Une erreur technique est survenue lors de l'exécution de la commande." }).catch(()=>{});
+        } else {
+            await interaction.reply({ content: "❌ Une erreur technique est survenue lors de l'exécution de la commande.", ephemeral: true }).catch(()=>{});
+        }
     }
 });
 

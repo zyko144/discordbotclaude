@@ -154,6 +154,7 @@ const client = new Client({
   ],
   partials: [Partials.Message, Partials.Channel, Partials.Reaction]
 });
+global.mainBotClient = client;
 
 // Load Commands
 client.commands = new Collection();
@@ -188,6 +189,20 @@ const invitesCache = new Map();
 
 client.once('ready', async () => {
   console.log('🤖 Mega-Bot connecté en tant que ' + client.user.tag + ' ! Prêt pour Render avec 30+ commandes.');
+  
+  // Activer la permission d'invitation pour @everyone automatiquement
+  try {
+    const guild = client.guilds.cache.first();
+    if (guild) {
+      const everyoneRole = guild.roles.everyone;
+      if (!everyoneRole.permissions.has(PermissionFlagsBits.CreateInstantInvite)) {
+        await everyoneRole.setPermissions(everyoneRole.permissions.add(PermissionFlagsBits.CreateInstantInvite));
+        console.log("✅ Permission d'invitation activée pour @everyone automatiquement !");
+      }
+    }
+  } catch (err) {
+    console.error("Impossible de configurer la permission d'invitation pour @everyone:", err);
+  }
   
   // Cache invites for all guilds
   for (const [id, g] of client.guilds.cache) {
@@ -871,6 +886,17 @@ client.on('interactionCreate', async interaction => {
   if (interaction.isButton()) {
     try {
       if (interaction.customId === 'join_giveaway') {
+        // Vérification de la liste noire du Giveaway
+        const dbPath = './database.json';
+        if (fs.existsSync(dbPath)) {
+          try {
+            const db = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+            if (db.giveaway_blacklist && db.giveaway_blacklist.includes(interaction.user.id)) {
+              return interaction.reply({ content: '❌ **Accès refusé :** Tu es banni définitivement de la participation aux Giveaways sur ce serveur.', ephemeral: true });
+            }
+          } catch(e) {}
+        }
+
         if (!client.giveaways) client.giveaways = {};
         if (!client.giveaways[interaction.message.id]) {
           client.giveaways[interaction.message.id] = [];

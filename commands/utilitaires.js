@@ -1,5 +1,5 @@
 
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ChannelType } = require('discord.js');
 
 module.exports = [
   new SlashCommandBuilder().setName('ping').setDescription('Affiche la latence du bot'),
@@ -19,7 +19,8 @@ module.exports = [
     .addStringOption(opt => opt.setName('choix5').setDescription('Cinquième choix').setRequired(false)),
   new SlashCommandBuilder().setName('say').setDescription('Fait parler le bot').addStringOption(opt => opt.setName('message').setDescription('Message').setRequired(true)),
   new SlashCommandBuilder().setName('invites').setDescription('Affiche le nombre d\'invitations d\'un membre').addUserOption(opt => opt.setName('utilisateur').setDescription('Membre ciblé (laisser vide pour voir ses propres stats)').setRequired(false)),
-  new SlashCommandBuilder().setName('topinvites').setDescription('Affiche le classement des meilleurs recruteurs du serveur')
+  new SlashCommandBuilder().setName('topinvites').setDescription('Affiche le classement des meilleurs recruteurs du serveur'),
+  new SlashCommandBuilder().setName('invite').setDescription('Affiche votre lien d\'invitation et explique comment inviter')
 ];
 
 module.exports.execute = async (interaction) => {
@@ -179,6 +180,47 @@ module.exports.execute = async (interaction) => {
     } catch (err) {
       console.error(err);
       return interaction.reply({ content: `❌ Impossible de récupérer les données. Erreur technique : \`${err.message}\``, ephemeral: true });
+    }
+  }
+
+  if (commandName === 'invite') {
+    try {
+      let channel = interaction.channel;
+      if (!channel || channel.type !== ChannelType.GuildText) {
+        channel = guild.channels.cache.find(c => c.type === ChannelType.GuildText);
+      }
+
+      let inviteUrl = "";
+      if (channel) {
+        const invite = await channel.createInvite({
+          maxAge: 0, 
+          maxUses: 0, 
+          unique: true, 
+          reason: `Créé par ${interaction.user.tag} via /invite`
+        }).catch(() => null);
+        
+        if (invite) {
+          inviteUrl = invite.url;
+        }
+      }
+
+      const embed = new EmbedBuilder()
+        .setTitle('📨 Inviter des amis')
+        .setDescription(`Pour inviter des amis et participer au concours d'invitations :\n\n` +
+          `1. **Créez votre propre lien d'invitation** :\n` +
+          (inviteUrl ? `👉 Voici votre lien d'invitation personnel généré : **${inviteUrl}**\n` : `👉 Utilisez l'interface Discord : Clic droit sur le serveur -> **Inviter des gens**.\n`) +
+          `\n` +
+          `2. **⚠️ RÈGLE IMPORTANTE** :\n` +
+          `Pour que vos invitations soient comptabilisées par le bot, **vous devez partager votre propre lien**. Si vos amis utilisent un autre lien, votre score n'augmentera pas.\n` +
+          `\n` +
+          `3. **Double Comptes interdits** :\n` +
+          `Notre système de sécurité détecte et exclut automatiquement les double comptes (comptes récents ou suspects). Tricher entraînera une exclusion immédiate des Giveaways et un possible bannissement.`)
+        .setColor(0xCF6B45);
+
+      return interaction.reply({ embeds: [embed] });
+    } catch (err) {
+      console.error(err);
+      return interaction.reply({ content: `❌ Impossible de générer l'invitation. Assure-toi que j'ai la permission "Gérer le serveur" et "Créer une invitation".`, ephemeral: true });
     }
   }
 };
