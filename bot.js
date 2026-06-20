@@ -547,7 +547,17 @@ client.on('messageCreate', async (message) => {
       // 2. Warn the main account
       await message.channel.send(`⚠️ **AVERTISSEMENT SÉCURITÉ** : <@${mainUser.id}> a été surpris en train d'inviter un Double Compte (\`${dcUser.username}\`) pour tricher au Giveaway.\nLe faux compte a été expulsé du serveur, et le compte principal a été banni du Giveaway en cours.`);
 
-      // 3. Remove main account from giveaway
+      // 3. Delete cheater's active invites so their score drops to 0
+      try {
+          const allInvites = await message.guild.invites.fetch();
+          for (const inv of allInvites.values()) {
+              if (inv.inviter && inv.inviter.id === mainUser.id) {
+                  await inv.delete();
+              }
+          }
+      } catch(e) {}
+
+      // 4. Remove main account from giveaway
       let found = false;
       for (const ch of message.guild.channels.cache.values()) {
           if (!ch.isTextBased()) continue;
