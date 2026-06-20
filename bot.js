@@ -56,7 +56,8 @@ const activeTicketCreations = new Set(); // Prevent double-click ticket race con
 const app = express();
 app.get('/', (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-  res.sendFile(require('path').join(__dirname, 'dashboard.html'));
+  const dashPath = require('path').join(__dirname, 'dashboard.html');
+  res.send(require('fs').readFileSync(dashPath, 'utf8'));
 });
 
 app.get('/api/invites', async (req, res) => {
@@ -102,15 +103,16 @@ app.get('/api/invites', async (req, res) => {
 
 // --- API LOGS ---
 app.get('/api/logs', (req, res) => {
-  const logFile = './chat_logs.json';
-  if (fs.existsSync(logFile)) {
-    res.sendFile(require('path').resolve(logFile));
+  const logFile = require('path').join(__dirname, 'chat_logs.json');
+  if (require('fs').existsSync(logFile)) {
+    res.setHeader('Content-Type', 'application/json');
+    res.send(require('fs').readFileSync(logFile, 'utf8'));
   } else {
     res.json({});
   }
 });
 app.get('/logs', (req, res) => {
-  res.sendFile(require('path').resolve('./dashboard.html'));
+  res.send(require('fs').readFileSync(require('path').join(__dirname, 'dashboard.html'), 'utf8'));
 });
 
 const PORT = process.env.PORT || 3000;
