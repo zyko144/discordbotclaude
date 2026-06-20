@@ -301,6 +301,51 @@ function getDbStats() {
 
 client.once('ready', async () => {
     console.log(`🛡️  Security-Bot connecté en tant que ${client.user.tag} !`);
+    
+    try {
+        const commands = [{
+            name: 'kickdc',
+            description: 'Expulse un Double Compte, avertit le compte principal et le retire du giveaway (Sécurité).',
+            default_member_permissions: String(PermissionFlagsBits.Administrator),
+            options: [
+                {
+                    name: 'double_compte',
+                    description: 'Le faux compte à expulser',
+                    type: 6, // USER type
+                    required: true
+                },
+                {
+                    name: 'compte_principal',
+                    description: 'Le compte principal du tricheur à avertir/bannir',
+                    type: 6, // USER type
+                    required: true
+                }
+            ]
+        },
+        {
+            name: 'repondre',
+            description: 'Répondre par message privé (DM) à un utilisateur depuis le bot de sécurité.',
+            default_member_permissions: String(PermissionFlagsBits.Administrator),
+            options: [
+                {
+                    name: 'utilisateur',
+                    description: 'L\'utilisateur à qui envoyer le message (ID ou @Mention)',
+                    type: 6, // USER type
+                    required: true
+                },
+                {
+                    name: 'message',
+                    description: 'Le message à envoyer',
+                    type: 3, // STRING type
+                    required: true
+                }
+            ]
+        }];
+        await client.application.commands.set(commands);
+        console.log("🛡️  Slash commands de sécurité enregistrées avec succès.");
+    } catch (e) {
+        console.error("Erreur enregistrement slash commands sécurité:", e);
+    }
     for (const [id, guild] of client.guilds.cache) {
         try {
             const invites = await guild.invites.fetch();
