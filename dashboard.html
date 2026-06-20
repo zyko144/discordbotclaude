@@ -240,21 +240,21 @@
             }
 
             leaderboard.forEach((user, index) => {
-                const rankClass = index < 3 ? \`rank-\${index + 1}\` : '';
+                const rankClass = index < 3 ? `rank-${index + 1}` : '';
                 const initial = user.username ? user.username.charAt(0).toUpperCase() : '?';
                 
-                list.innerHTML += \`
-                    <li class="list-item \${rankClass}">
+                list.innerHTML += `
+                    <li class="list-item ${rankClass}">
                         <div class="user-info">
-                            <div class="avatar">\${initial}</div>
+                            <div class="avatar">${initial}</div>
                             <div class="details">
-                                <h3>\${user.username}</h3>
+                                <h3>${user.username}</h3>
                                 <p>Recruteur Officiel</p>
                             </div>
                         </div>
-                        <div class="stat-badge">\${user.uses} invites</div>
+                        <div class="stat-badge">${user.uses} invites</div>
                     </li>
-                \`;
+                `;
             });
         }
 
@@ -285,11 +285,11 @@
             const sortedRecruiters = Object.keys(grouped).sort((a, b) => grouped[b].length - grouped[a].length);
 
             sortedRecruiters.forEach(recruiter => {
-                list.innerHTML += \`
+                list.innerHTML += `
                     <div style="margin-top: 1.5rem; margin-bottom: 0.5rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--border);">
-                        <h3 style="color: var(--accent); font-size: 1.1rem;"><i class="fa-solid fa-folder-open" style="margin-right: 8px;"></i>Catégorie : \${recruiter} (\${grouped[recruiter].length} invités)</h3>
+                        <h3 style="color: var(--accent); font-size: 1.1rem;"><i class="fa-solid fa-folder-open" style="margin-right: 8px;"></i>Catégorie : ${recruiter} (${grouped[recruiter].length} invités)</h3>
                     </div>
-                \`;
+                `;
 
                 // Inverser pour avoir les plus récents en haut pour chaque recruteur
                 const recruiterHistory = [...grouped[recruiter]].reverse();
@@ -299,21 +299,21 @@
                         day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
                     });
                     
-                    list.innerHTML += \`
+                    list.innerHTML += `
                         <li class="list-item" style="margin-left: 1rem; border-left: 3px solid var(--border); border-radius: 0 8px 8px 0;">
                             <div class="user-info">
                                 <div class="avatar" style="background-color: var(--card-bg); color: var(--text-main); border: 1px solid var(--border);">
                                     <i class="fa-solid fa-user"></i>
                                 </div>
                                 <div class="details">
-                                    <h3>\${entry.invitedUsername}</h3>
+                                    <h3>${entry.invitedUsername}</h3>
                                 </div>
                             </div>
                             <div style="font-size: 0.8rem; color: var(--text-muted);">
-                                \${date}
+                                ${date}
                             </div>
                         </li>
-                    \`;
+                    `;
                 });
             });
         }
