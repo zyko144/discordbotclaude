@@ -863,13 +863,18 @@ client.on('interactionCreate', async interaction => {
         }
         
         // VÉRIFICATION DES INVITATIONS OBLIGATOIRE
-        const invites = await interaction.guild.invites.fetch();
         let hasInvited = false;
-        invites.forEach(inv => {
-          if (inv.inviter && inv.inviter.id === interaction.user.id && inv.uses > 0) {
-            hasInvited = true;
-          }
-        });
+        try {
+            const invites = await interaction.guild.invites.fetch();
+            invites.forEach(inv => {
+              if (inv.inviter && inv.inviter.id === interaction.user.id && inv.uses > 0) {
+                hasInvited = true;
+              }
+            });
+        } catch (error) {
+            console.error("Impossible de fetch les invitations pour le giveaway:", error);
+            return interaction.reply({ content: '❌ **Erreur :** Impossible de vérifier tes invitations. Le propriétaire du serveur doit donner la permission **"Gérer le serveur"** au bot pour que les Giveaways fonctionnent !', ephemeral: true });
+        }
 
         if (!hasInvited) {
           return interaction.reply({ content: '❌ **Accès refusé :** Tu dois inviter au moins **1 ami** sur le serveur (via ton propre lien) pour participer au giveaway !\n\n⚠️ **ATTENTION : La création de Doubles Comptes (DC) pour tricher entraîne un BANNISSEMENT DÉFINITIF immédiat par la sécurité.**', ephemeral: true });
@@ -1097,6 +1102,7 @@ client.on('guildMemberAdd', async member => {
   } catch (err) {
     console.error("Erreur guildMemberAdd", err);
   }
+});
 // --- ANNONCE MAINTENANCE AUTOMATIQUE ---
 let isShuttingDown = false;
 async function announceDowntime() {
