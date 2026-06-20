@@ -327,18 +327,52 @@ client.once('ready', async () => {
             description: 'Répondre par message privé (DM) à un utilisateur depuis le bot de sécurité.',
             default_member_permissions: String(PermissionFlagsBits.Administrator),
             options: [
-                {
-                    name: 'utilisateur',
-                    description: 'L\'utilisateur à qui envoyer le message (ID ou @Mention)',
-                    type: 6, // USER type
-                    required: true
-                },
-                {
-                    name: 'message',
-                    description: 'Le message à envoyer',
-                    type: 3, // STRING type
-                    required: true
-                }
+                { name: 'utilisateur', description: 'L\'utilisateur à qui envoyer le message (ID ou @Mention)', type: 6, required: true },
+                { name: 'message', description: 'Le message à envoyer', type: 3, required: true }
+            ]
+        },
+        {
+            name: 'ban',
+            description: 'Bannir définitivement un membre du serveur.',
+            default_member_permissions: String(PermissionFlagsBits.Administrator),
+            options: [
+                { name: 'utilisateur', description: 'Le membre à bannir', type: 6, required: true },
+                { name: 'raison', description: 'La raison du bannissement', type: 3, required: false }
+            ]
+        },
+        {
+            name: 'kick',
+            description: 'Expulser un membre du serveur.',
+            default_member_permissions: String(PermissionFlagsBits.Administrator),
+            options: [
+                { name: 'utilisateur', description: 'Le membre à expulser', type: 6, required: true },
+                { name: 'raison', description: 'La raison de l\'expulsion', type: 3, required: false }
+            ]
+        },
+        {
+            name: 'quarantine',
+            description: 'Retirer tous les rôles d\'un membre pour l\'isoler.',
+            default_member_permissions: String(PermissionFlagsBits.Administrator),
+            options: [
+                { name: 'utilisateur', description: 'Le membre à placer en quarantaine', type: 6, required: true },
+                { name: 'raison', description: 'La raison de la mise en quarantaine', type: 3, required: false }
+            ]
+        },
+        {
+            name: 'warn',
+            description: 'Avertir un membre et enregistrer l\'avertissement.',
+            default_member_permissions: String(PermissionFlagsBits.Administrator),
+            options: [
+                { name: 'utilisateur', description: 'Le membre à avertir', type: 6, required: true },
+                { name: 'raison', description: 'La raison de l\'avertissement', type: 3, required: true }
+            ]
+        },
+        {
+            name: 'clear',
+            description: 'Supprimer un nombre précis de messages dans ce salon.',
+            default_member_permissions: String(PermissionFlagsBits.Administrator),
+            options: [
+                { name: 'nombre', description: 'Nombre de messages à supprimer (max 100)', type: 4, required: true }
             ]
         }];
         await client.application.commands.set(commands);
