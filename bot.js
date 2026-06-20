@@ -512,6 +512,15 @@ client.once('ready', async () => {
 
 // Message et Commandes standards
 client.on('messageCreate', async (message) => {
+  if (message.content === '!reset-top' && message.member && message.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      const dbPath = require('path').join(__dirname, 'database.json');
+      let db = {};
+      if (require('fs').existsSync(dbPath)) db = JSON.parse(require('fs').readFileSync(dbPath, 'utf8'));
+      db.invite_history = [];
+      db.invite_warns = {};
+      require('fs').writeFileSync(dbPath, JSON.stringify(db, null, 2));
+      return message.reply("✅ Les classements des invitations et les historiques ont été réinitialisés avec succès pour le nouveau Giveaway !");
+  }
   if (message.author.bot) return;
 
   // --- BRIDGE TO SECURITY BOT ---
@@ -863,7 +872,7 @@ client.on('interactionCreate', async interaction => {
         });
 
         if (!hasInvited) {
-          return interaction.reply({ content: '❌ **Accès refusé :** Tu dois inviter au moins **1 ami** sur le serveur (via ton propre lien) pour pouvoir participer au giveaway !', ephemeral: true });
+          return interaction.reply({ content: '❌ **Accès refusé :** Tu dois inviter au moins **1 ami** sur le serveur (via ton propre lien) pour participer au giveaway !\n\n⚠️ **ATTENTION : La création de Doubles Comptes (DC) pour tricher entraîne un BANNISSEMENT DÉFINITIF immédiat par la sécurité.**', ephemeral: true });
         }
 
         const participants = client.giveaways[interaction.message.id];
@@ -880,7 +889,7 @@ client.on('interactionCreate', async interaction => {
              if (participantList.length > 1000) {
                  participantList = participantList.substring(0, 1000) + '... et bien d\'autres !';
              }
-             embed.setDescription(`${baseDesc}**👥 Participants (${participants.length}) :**\n${participantList}\n\n*(Nettoyage auto : seuls les membres ayant invité au moins 1 personne sont autorisés)*`);
+             embed.setDescription(`${baseDesc}**👥 Participants (${participants.length}) :**\n${participantList}\n\n*(Nettoyage auto : seuls les membres ayant invité au moins 1 personne sont autorisés. ⚠️ Les Doubles Comptes (DC) = BAN DIRECT !)*`);
              await interaction.message.edit({ embeds: [embed] });
           }
 
@@ -1088,6 +1097,25 @@ client.on('guildMemberAdd', async member => {
   } catch (err) {
     console.error("Erreur guildMemberAdd", err);
   }
-});
+// --- ANNONCE MAINTENANCE AUTOMATIQUE ---
+let isShuttingDown = false;
+async function announceDowntime() {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    try {
+        const guild = client.guilds.cache.first();
+        if (guild) {
+            let channel = guild.channels.cache.find(c => c.name.toLowerCase().includes('annonce'));
+            if (!channel) channel = guild.channels.cache.find(c => c.name.toLowerCase().includes('général') || c.name.toLowerCase().includes('general'));
+            if (channel) {
+                await channel.send('⚠️ **MAINTENANCE AUTO** : Le bot doit redémarrer pour une mise à jour système ou une maintenance côté hébergeur. \n\n*Ne paniquez pas, nous serons de retour dans quelques instants avec encore plus de puissance ! 🚀*').catch(()=>{});
+            }
+        }
+    } catch(e) {}
+    process.exit(0);
+}
+
+process.on('SIGTERM', announceDowntime); // Render restart
+process.on('SIGINT', announceDowntime);  // Local Ctrl+C
 
 client.login(TOKEN);
