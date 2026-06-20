@@ -94,7 +94,7 @@ app.get('/api/invites', async (req, res) => {
     }
     
     console.log("Sending JSON response");
-    res.json({ leaderboard: mergedLeaderboard.slice(0, 10), history: history.slice(-50) });
+    res.json({ leaderboard: mergedLeaderboard.slice(0, 10), history: history });
   } catch (err) {
     console.log("Erreur API invites:", err);
     res.status(500).json({ error: err.message });
