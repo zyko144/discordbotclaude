@@ -514,7 +514,7 @@ client.on('messageCreate', async (message) => {
   // --- BRIDGE TO SECURITY BOT ---
   try {
       if (message.channel.type === ChannelType.DM || (message.channel.name && message.channel.name.includes('ia')) || message.channel.name.includes('ticket')) {
-          fetch('http://localhost:3001/api/bridge/log', {
+          fetch(process.env.BRIDGE_URL || 'http://localhost:3001/api/bridge/log', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -752,7 +752,7 @@ client.on('messageCreate', async (message) => {
           
           // --- BRIDGE BOT REPLY TO SECURITY DASHBOARD ---
           try {
-              fetch('http://localhost:3001/api/bridge/log', {
+              fetch(process.env.BRIDGE_URL || 'http://localhost:3001/api/bridge/log', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
@@ -777,7 +777,7 @@ client.on('messageCreate', async (message) => {
       console.error('Gemini General Error:', error);
       await message.reply("Désolé, j'ai rencontré une erreur imprévue.").catch(() => {});
       try {
-          fetch('http://localhost:3001/api/bridge/log', {
+          fetch(process.env.BRIDGE_URL || 'http://localhost:3001/api/bridge/log', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ type: 'dm', log: { author: 'ClaudePlus', userId: message.author.id, content: "Désolé, j'ai rencontré une erreur imprévue.", channel: 'DM ClaudePlus', time: new Date().toLocaleTimeString() } })
