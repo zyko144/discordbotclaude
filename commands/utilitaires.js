@@ -126,7 +126,7 @@ module.exports.execute = async (interaction) => {
       return interaction.reply({ embeds: [embed] });
     } catch (err) {
       console.error(err);
-      return interaction.reply({ content: '❌ Impossible de récupérer les invitations. Assurez-vous que le bot a la permission "Gérer le serveur".', ephemeral: true });
+      return interaction.reply({ content: `❌ Impossible de récupérer les données. Erreur technique : \`${err.message}\``, ephemeral: true });
     }
   }
   if (commandName === 'topinvites') {
@@ -178,7 +178,7 @@ module.exports.execute = async (interaction) => {
       return interaction.reply({ embeds: [embed] });
     } catch (err) {
       console.error(err);
-      return interaction.reply({ content: '❌ Impossible de récupérer les invitations. Assurez-vous que le bot a la permission "Gérer le serveur".', ephemeral: true });
+      return interaction.reply({ content: `❌ Impossible de récupérer les données. Erreur technique : \`${err.message}\``, ephemeral: true });
     }
   }
 };
