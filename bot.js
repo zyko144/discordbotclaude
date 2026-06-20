@@ -12,6 +12,7 @@ const { consumeQuota, getRemainingQuota } = require('./utils/quota');
 let rawKeys = process.env.GEMINI_API_KEYS || '';
 let apiKeys = rawKeys.split(',').map(k => k.trim()).filter(k => k.length > 0);
 let currentKeyIndex = 0;
+const keyCooldowns = new Map();
 
 let vertexModelInstance = null;
 let vertexInitialized = false;
@@ -43,10 +44,26 @@ function getGeminiModel() {
     if (vertexModelInstance) return { type: 'genai_vertex', client: vertexModelInstance, sysInstr };
   }
 
-  // Priorité 2 : Fallback sur l'API Key classique (AI Studio)
+  // Priorité 2 : Fallback sur l'API Key classique (AI Studio) avec Cooldown
   if (apiKeys.length === 0) return null;
-  const genAI = new GoogleGenAI({ apiKey: apiKeys[currentKeyIndex] });
-  return { type: 'genai_studio', client: genAI, sysInstr };
+  
+  const now = Date.now();
+  let startIndex = currentKeyIndex;
+  
+  while (true) {
+      let candidateKey = apiKeys[currentKeyIndex];
+      let cd = keyCooldowns.get(candidateKey);
+      
+      if (!cd || now > cd) {
+          const genAI = new GoogleGenAI({ apiKey: candidateKey });
+          return { type: 'genai_studio', client: genAI, sysInstr };
+      }
+      
+      currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
+      if (currentKeyIndex === startIndex) {
+          return null; // ALL keys are exhausted right now!
+      }
+  }
 }
 
 const aiSessions = new Map(); // userId -> chatSession
@@ -494,6 +511,26 @@ client.once('ready', async () => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
+  // --- BRIDGE TO SECURITY BOT ---
+  try {
+      if (message.channel.type === ChannelType.DM || (message.channel.name && message.channel.name.includes('ia')) || message.channel.name.includes('ticket')) {
+          fetch('http://localhost:3001/api/bridge/log', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  type: message.channel.type === ChannelType.DM ? 'dm' : 'chat',
+                  log: {
+                      author: message.author.tag,
+                      userId: message.author.id,
+                      content: message.content,
+                      channel: message.channel.type === ChannelType.DM ? 'DM ClaudePlus' : message.channel.name,
+                      time: new Date().toLocaleTimeString()
+                  }
+              })
+          }).catch(()=>{});
+      }
+  } catch(e) {}
+
   // --- IA Claude Chat (Propulsé par Gemini) ---
   if ((message.channel.type === ChannelType.DM || (message.channel.name && message.channel.name.includes('ia'))) && !message.author.bot) {
     if (apiKeys.length === 0) {
@@ -533,7 +570,9 @@ client.on('messageCreate', async (message) => {
         try {
           const aiData = getGeminiModel();
           if (!aiData) {
-              aiResponse = "Erreur: Modèle IA indisponible.";
+              success = true;
+              aiResponse = "⚠️ L'intelligence artificielle est temporairement surchargée (Toutes les clés API sont épuisées). Veuillez réessayer dans 1 heure.";
+              await new Promise(r => setTimeout(r, 2000)); // UX delay for dashboard typing indicator
               break;
           }
           const { type, client: model, sysInstr } = aiData;
@@ -586,16 +625,22 @@ client.on('messageCreate', async (message) => {
           
           const chatSession = aiSessions.get(userId);
           const result = await chatSession.sendMessage({ message: message.content });
+          await new Promise(r => setTimeout(r, 2000)); // UX delay for dashboard typing indicator
           aiResponse = result.text;
           success = true;
           
         } catch (apiError) {
-          console.error(`[Clé ${currentKeyIndex}] Erreur IA:`, apiError.message);
+          const errMsg = apiError.message || "";
+          console.error(`[Clé ${currentKeyIndex}] Erreur IA:`, errMsg);
           
           if (process.env.VERTEX_CREDENTIALS_JSON) {
               success = true;
-              aiResponse = "⚠️ **Erreur critique Gemini 3.1 Pro (Vertex AI)** : L'API Google Cloud a refusé la connexion.\n\n*Causes probables :*\n1. Tu n'as pas activé l'API Vertex AI sur Google Cloud Console.\n2. Le modèle n'est pas disponible ou la région bloque.\n\n*Détail de l'erreur :* `" + apiError.message + "`";
+              aiResponse = "⚠️ **Erreur critique Gemini 3.1 Pro (Vertex AI)** : L'API Google Cloud a refusé la connexion.\n\n*Causes probables :*\n1. Tu n'as pas activé l'API Vertex AI sur Google Cloud Console.\n2. Le modèle n'est pas disponible ou la région bloque.\n\n*Détail de l'erreur :* `" + errMsg + "`";
               break;
+          }
+
+          if (errMsg.includes('429') || errMsg.includes('exhausted') || errMsg.includes('quota')) {
+              keyCooldowns.set(apiKeys[currentKeyIndex], Date.now() + 120000); // 2 minutes cooldown
           }
 
           currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
@@ -704,6 +749,24 @@ client.on('messageCreate', async (message) => {
           } else {
             await message.author.send(contentToSend);
           }
+          
+          // --- BRIDGE BOT REPLY TO SECURITY DASHBOARD ---
+          try {
+              fetch('http://localhost:3001/api/bridge/log', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      type: 'dm',
+                      log: {
+                          author: 'ClaudePlus',
+                          userId: message.author.id, // We associate the bot's reply to the specific user's folder
+                          content: contentToSend,
+                          channel: 'DM ClaudePlus',
+                          time: new Date().toLocaleTimeString()
+                      }
+                  })
+              }).catch(()=>{});
+          } catch(e) {}
         }
         
         if (message.channel.type !== ChannelType.DM) {
@@ -713,6 +776,13 @@ client.on('messageCreate', async (message) => {
     } catch (error) {
       console.error('Gemini General Error:', error);
       await message.reply("Désolé, j'ai rencontré une erreur imprévue.").catch(() => {});
+      try {
+          fetch('http://localhost:3001/api/bridge/log', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ type: 'dm', log: { author: 'ClaudePlus', userId: message.author.id, content: "Désolé, j'ai rencontré une erreur imprévue.", channel: 'DM ClaudePlus', time: new Date().toLocaleTimeString() } })
+          }).catch(()=>{});
+      } catch(e) {}
     }
     return; // On arrête là pour le salon ia/dm
   }
@@ -903,7 +973,7 @@ client.on('interactionCreate', async interaction => {
         .setTimestamp();
         
       await ticketChannel.send({ content: "Bienvenue <@" + interaction.user.id + "> !", embeds: [embed], components: [row], files: [attachment] });
-        await interaction.reply({ content: `✅ Ton ticket a été ouvert : ${ticketChannel}`, ephemeral: true });
+        await interaction.reply({ content: `✅ Ton ticket a été ouvert : ${ticketChannel}`, ephemeral: true }).catch(console.error);
       } catch (error) {
         console.error(error);
         await interaction.reply({ content: "❌ Une erreur est survenue lors de la création du ticket.", ephemeral: true });
