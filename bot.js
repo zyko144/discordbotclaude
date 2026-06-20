@@ -69,13 +69,16 @@ function getGeminiModel() {
 const aiSessions = new Map(); // userId -> chatSession
 const activeTicketCreations = new Set(); // Prevent double-click ticket race conditions
 
-// --- SERVER EXPRESS (Keep-Alive pour Render) ---
+// --- SERVER EXPRESS & SOCKET.IO (Keep-Alive pour Render) ---
 const app = express();
-app.get('/', (req, res) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-  const dashPath = require('path').join(__dirname, 'dashboard.html');
-  res.send(require('fs').readFileSync(dashPath, 'utf8'));
-});
+const http = require('http');
+const { Server } = require('socket.io');
+
+const server = http.createServer(app);
+const io = new Server(server);
+
+// Initialiser le Security Bot sur le même serveur
+require('./security_bot.js')(app, io);
 
 app.get('/api/invites', async (req, res) => {
   console.log("API /api/invites appelee");
@@ -133,7 +136,7 @@ app.get('/logs', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log('🌍 Serveur web lancé sur le port ' + PORT));
+server.listen(PORT, () => console.log('🌍 Serveur web lancé sur le port ' + PORT));
 
 // --- CONFIGURATION DISCORD ---
 const TOKEN = process.env.TOKEN;
@@ -514,7 +517,7 @@ client.on('messageCreate', async (message) => {
   // --- BRIDGE TO SECURITY BOT ---
   try {
       if (message.channel.type === ChannelType.DM || (message.channel.name && message.channel.name.includes('ia')) || message.channel.name.includes('ticket')) {
-          fetch(process.env.BRIDGE_URL || 'http://localhost:3001/api/bridge/log', {
+          fetch('http://localhost:' + PORT + '/api/bridge/log', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -752,7 +755,7 @@ client.on('messageCreate', async (message) => {
           
           // --- BRIDGE BOT REPLY TO SECURITY DASHBOARD ---
           try {
-              fetch(process.env.BRIDGE_URL || 'http://localhost:3001/api/bridge/log', {
+              fetch('http://localhost:' + PORT + '/api/bridge/log', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
@@ -777,7 +780,7 @@ client.on('messageCreate', async (message) => {
       console.error('Gemini General Error:', error);
       await message.reply("Désolé, j'ai rencontré une erreur imprévue.").catch(() => {});
       try {
-          fetch(process.env.BRIDGE_URL || 'http://localhost:3001/api/bridge/log', {
+          fetch('http://localhost:' + PORT + '/api/bridge/log', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ type: 'dm', log: { author: 'ClaudePlus', userId: message.author.id, content: "Désolé, j'ai rencontré une erreur imprévue.", channel: 'DM ClaudePlus', time: new Date().toLocaleTimeString() } })

@@ -1,22 +1,15 @@
 const { Client, GatewayIntentBits, Partials, EmbedBuilder, ChannelType, PermissionFlagsBits, AuditLogEvent } = require('discord.js');
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
 const fs = require('fs');
 const path = require('path');
 
 // --- SECRETS & CONFIG ---
 const TOKEN = process.env.SECURITY_TOKEN;
-const PORT = 3001;
 const DB_PATH = './database.json';
-
-// --- EXPRESS & SOCKET.IO ---
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
 
 const CHAT_LOGS_PATH = './chat_logs.json';
 const DM_LOGS_PATH = './dm_logs.json';
+
+module.exports = function initSecurityBot(app, io) {
 
 function getLogs(path) {
     if (!fs.existsSync(path)) return [];
@@ -226,10 +219,6 @@ io.on('connection', async (socket) => {
             console.error("Erreur action OSINT:", e);
         }
     });
-});
-
-server.listen(PORT, () => {
-    console.log(`🛡️  Serveur Dashboard Sécurité lancé sur http://localhost:${PORT}`);
 });
 
 // --- DISCORD CLIENT ---
@@ -645,3 +634,4 @@ client.on('messageCreate', async message => {
 });
 
 client.login(TOKEN);
+};
