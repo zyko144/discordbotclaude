@@ -54,14 +54,23 @@ const activeTicketCreations = new Set(); // Prevent double-click ticket race con
 
 // --- SERVER EXPRESS (Keep-Alive pour Render) ---
 const app = express();
-app.get('/', (req, res) => res.sendFile(require('path').resolve('./dashboard.html')));
+app.get('/', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.sendFile(require('path').resolve('./dashboard.html'));
+});
 
 app.get('/api/invites', async (req, res) => {
+  console.log("API /api/invites appelee");
   const guild = client.guilds.cache.first();
-  if (!guild) return res.json({ leaderboard: [], history: [] });
+  if (!guild) {
+    console.log("No guild found");
+    return res.json({ leaderboard: [], history: [] });
+  }
   
   try {
+    console.log("Fetching invites...");
     const invites = await guild.invites.fetch();
+    console.log(`Fetched ${invites.size} invites`);
     const rawLeaderboard = invites
       .filter(i => i.uses > 0 && i.inviter)
       .map(i => ({ username: i.inviter.username, uses: i.uses }));
@@ -75,6 +84,7 @@ app.get('/api/invites', async (req, res) => {
     map.forEach((uses, username) => mergedLeaderboard.push({ username, uses }));
     mergedLeaderboard.sort((a, b) => b.uses - a.uses);
 
+    console.log("Reading DB...");
     const dbPath = './database.json';
     let history = [];
     if (fs.existsSync(dbPath)) {
@@ -82,8 +92,10 @@ app.get('/api/invites', async (req, res) => {
        history = db.invite_history || [];
     }
     
+    console.log("Sending JSON response");
     res.json({ leaderboard: mergedLeaderboard.slice(0, 10), history: history.slice(-50) });
   } catch (err) {
+    console.log("Erreur API invites:", err);
     res.status(500).json({ error: err.message });
   }
 });
