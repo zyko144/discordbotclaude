@@ -272,29 +272,49 @@
                 return;
             }
 
-            // Inverser pour avoir les plus récents en haut
-            const reversedHistory = [...history].reverse();
-            reversedHistory.forEach(entry => {
-                const date = new Date(entry.timestamp).toLocaleString('fr-FR', {
-                    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
-                });
-                
+            // Grouper par recruteur
+            const grouped = {};
+            history.forEach(entry => {
+                if (!grouped[entry.inviterUsername]) {
+                    grouped[entry.inviterUsername] = [];
+                }
+                grouped[entry.inviterUsername].push(entry);
+            });
+
+            // Trier les recruteurs par nombre d'invitations (décroissant)
+            const sortedRecruiters = Object.keys(grouped).sort((a, b) => grouped[b].length - grouped[a].length);
+
+            sortedRecruiters.forEach(recruiter => {
                 list.innerHTML += \`
-                    <li class="list-item">
-                        <div class="user-info">
-                            <div class="avatar" style="background-color: var(--accent); color: white;">
-                                <i class="fa-solid fa-arrow-right-to-bracket"></i>
-                            </div>
-                            <div class="details">
-                                <h3>\${entry.invitedUsername}</h3>
-                                <p>Invité(e) par <strong>\${entry.inviterUsername}</strong></p>
-                            </div>
-                        </div>
-                        <div style="font-size: 0.8rem; color: var(--text-muted);">
-                            \${date}
-                        </div>
-                    </li>
+                    <div style="margin-top: 1.5rem; margin-bottom: 0.5rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--border);">
+                        <h3 style="color: var(--accent); font-size: 1.1rem;"><i class="fa-solid fa-folder-open" style="margin-right: 8px;"></i>Catégorie : \${recruiter} (\${grouped[recruiter].length} invités)</h3>
+                    </div>
                 \`;
+
+                // Inverser pour avoir les plus récents en haut pour chaque recruteur
+                const recruiterHistory = [...grouped[recruiter]].reverse();
+                
+                recruiterHistory.forEach(entry => {
+                    const date = new Date(entry.timestamp).toLocaleString('fr-FR', {
+                        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+                    });
+                    
+                    list.innerHTML += \`
+                        <li class="list-item" style="margin-left: 1rem; border-left: 3px solid var(--border); border-radius: 0 8px 8px 0;">
+                            <div class="user-info">
+                                <div class="avatar" style="background-color: var(--card-bg); color: var(--text-main); border: 1px solid var(--border);">
+                                    <i class="fa-solid fa-user"></i>
+                                </div>
+                                <div class="details">
+                                    <h3>\${entry.invitedUsername}</h3>
+                                </div>
+                            </div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted);">
+                                \${date}
+                            </div>
+                        </li>
+                    \`;
+                });
             });
         }
 
