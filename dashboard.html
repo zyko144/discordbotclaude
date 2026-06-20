@@ -178,6 +178,48 @@
             margin-bottom: 1rem;
             opacity: 0.5;
         }
+
+        /* --- Accordion Styles --- */
+        details.recruiter-category {
+            margin-top: 1rem;
+            background-color: rgba(255,255,255,0.02);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        details.recruiter-category[open] {
+            background-color: rgba(255,255,255,0.04);
+            border-color: rgba(88, 101, 242, 0.4);
+        }
+
+        summary.recruiter-summary {
+            padding: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            font-weight: 600;
+            color: var(--accent);
+            list-style: none;
+            outline: none;
+            user-select: none;
+        }
+
+        summary.recruiter-summary::-webkit-details-marker {
+            display: none;
+        }
+
+        summary.recruiter-summary i.caret {
+            margin-right: 12px;
+            transition: transform 0.2s;
+            color: var(--text-muted);
+        }
+
+        details.recruiter-category[open] summary.recruiter-summary i.caret {
+            transform: rotate(90deg);
+            color: var(--accent);
+        }
     </style>
 </head>
 <body>
@@ -284,11 +326,15 @@
             // Trier les recruteurs par nombre d'invitations (décroissant)
             const sortedRecruiters = Object.keys(grouped).sort((a, b) => grouped[b].length - grouped[a].length);
 
-            sortedRecruiters.forEach(recruiter => {
-                list.innerHTML += `
-                    <div style="margin-top: 1.5rem; margin-bottom: 0.5rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--border);">
-                        <h3 style="color: var(--accent); font-size: 1.1rem;"><i class="fa-solid fa-folder-open" style="margin-right: 8px;"></i>Catégorie : ${recruiter} (${grouped[recruiter].length} invités)</h3>
-                    </div>
+            sortedRecruiters.forEach((recruiter, index) => {
+                let html = `
+                    <details class="recruiter-category" ${index === 0 ? 'open' : ''}>
+                        <summary class="recruiter-summary">
+                            <i class="fa-solid fa-caret-right caret"></i>
+                            <i class="fa-solid fa-folder-open" style="margin-right: 8px;"></i>
+                            ${recruiter} <span style="color: var(--text-muted); font-size: 0.85rem; font-weight: 400; margin-left: 8px;">(${grouped[recruiter].length} invité(s))</span>
+                        </summary>
+                        <div style="padding: 0 1rem 1rem 1rem;">
                 `;
 
                 // Inverser pour avoir les plus récents en haut pour chaque recruteur
@@ -299,22 +345,25 @@
                         day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
                     });
                     
-                    list.innerHTML += `
-                        <li class="list-item" style="margin-left: 1rem; border-left: 3px solid var(--border); border-radius: 0 8px 8px 0;">
+                    html += `
+                        <div class="list-item" style="margin-left: 0.5rem; border-left: 2px solid var(--accent); border-radius: 0 8px 8px 0; background-color: rgba(0,0,0,0.2);">
                             <div class="user-info">
-                                <div class="avatar" style="background-color: var(--card-bg); color: var(--text-main); border: 1px solid var(--border);">
+                                <div class="avatar" style="width: 32px; height: 32px; background-color: var(--card-bg); color: var(--text-main); border: 1px solid var(--border); font-size: 0.8rem;">
                                     <i class="fa-solid fa-user"></i>
                                 </div>
                                 <div class="details">
-                                    <h3>${entry.invitedUsername}</h3>
+                                    <h3 style="font-size: 0.95rem;">${entry.invitedUsername}</h3>
                                 </div>
                             </div>
-                            <div style="font-size: 0.8rem; color: var(--text-muted);">
+                            <div style="font-size: 0.75rem; color: var(--text-muted);">
                                 ${date}
                             </div>
-                        </li>
+                        </div>
                     `;
                 });
+
+                html += `</div></details>`;
+                list.innerHTML += html;
             });
         }
 
