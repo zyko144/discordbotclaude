@@ -78,7 +78,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 // Initialiser le Security Bot sur le même serveur
-require('./security_bot.js')(app, io);
+const securityBot = require('./security_bot.js')(app, io);
 
 app.get('/api/invites', async (req, res) => {
   console.log("API /api/invites appelee");
@@ -517,20 +517,14 @@ client.on('messageCreate', async (message) => {
   // --- BRIDGE TO SECURITY BOT ---
   try {
       if (message.channel.type === ChannelType.DM || (message.channel.name && message.channel.name.includes('ia')) || message.channel.name.includes('ticket')) {
-          fetch('http://localhost:' + PORT + '/api/bridge/log', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                  type: message.channel.type === ChannelType.DM ? 'dm' : 'chat',
-                  log: {
-                      author: message.author.tag,
-                      userId: message.author.id,
-                      content: message.content,
-                      channel: message.channel.type === ChannelType.DM ? 'DM ClaudePlus' : message.channel.name,
-                      time: new Date().toLocaleTimeString()
-                  }
-              })
-          }).catch(()=>{});
+          const logType = message.channel.type === ChannelType.DM ? 'dm' : 'chat';
+          securityBot.logToDashboard(logType, {
+              author: message.author.tag,
+              userId: message.author.id,
+              content: message.content,
+              channel: message.channel.type === ChannelType.DM ? 'DM ClaudePlus' : message.channel.name,
+              time: new Date().toLocaleTimeString()
+          });
       }
   } catch(e) {}
 
@@ -755,20 +749,13 @@ client.on('messageCreate', async (message) => {
           
           // --- BRIDGE BOT REPLY TO SECURITY DASHBOARD ---
           try {
-              fetch('http://localhost:' + PORT + '/api/bridge/log', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                      type: 'dm',
-                      log: {
-                          author: 'ClaudePlus',
-                          userId: message.author.id, // We associate the bot's reply to the specific user's folder
-                          content: contentToSend,
-                          channel: 'DM ClaudePlus',
-                          time: new Date().toLocaleTimeString()
-                      }
-                  })
-              }).catch(()=>{});
+              securityBot.logToDashboard('dm', {
+                  author: 'ClaudePlus',
+                  userId: message.author.id, // We associate the bot's reply to the specific user's folder
+                  content: contentToSend,
+                  channel: 'DM ClaudePlus',
+                  time: new Date().toLocaleTimeString()
+              });
           } catch(e) {}
         }
         
@@ -780,11 +767,7 @@ client.on('messageCreate', async (message) => {
       console.error('Gemini General Error:', error);
       await message.reply("Désolé, j'ai rencontré une erreur imprévue.").catch(() => {});
       try {
-          fetch('http://localhost:' + PORT + '/api/bridge/log', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ type: 'dm', log: { author: 'ClaudePlus', userId: message.author.id, content: "Désolé, j'ai rencontré une erreur imprévue.", channel: 'DM ClaudePlus', time: new Date().toLocaleTimeString() } })
-          }).catch(()=>{});
+          securityBot.logToDashboard('dm', { author: 'ClaudePlus', userId: message.author.id, content: "Désolé, j'ai rencontré une erreur imprévue.", channel: 'DM ClaudePlus', time: new Date().toLocaleTimeString() });
       } catch(e) {}
     }
     return; // On arrête là pour le salon ia/dm

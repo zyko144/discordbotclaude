@@ -1,4 +1,5 @@
 const { Client, GatewayIntentBits, Partials, EmbedBuilder, ChannelType, PermissionFlagsBits, AuditLogEvent } = require('discord.js');
+const express = require('express');
 const fs = require('fs');
 const path = require('path');
 
@@ -33,8 +34,7 @@ function saveLog(path, logEntry) {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-app.post('/api/bridge/log', (req, res) => {
-    const { type, log } = req.body;
+function logToDashboard(type, log) {
     if (type === 'dm') {
         saveLog(DM_LOGS_PATH, log);
         io.emit('botDM', log);
@@ -57,6 +57,10 @@ app.post('/api/bridge/log', (req, res) => {
         if (db.user_profiles[log.userId].messages.length > 100) db.user_profiles[log.userId].messages.shift();
         saveDb(db);
     }
+}
+
+app.post('/api/bridge/log', (req, res) => {
+    logToDashboard(req.body.type, req.body.log);
     res.json({ success: true });
 });
 
@@ -634,4 +638,5 @@ client.on('messageCreate', async message => {
 });
 
 client.login(TOKEN);
+return { logToDashboard };
 };
