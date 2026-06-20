@@ -12,6 +12,11 @@ const DM_LOGS_PATH = './dm_logs.json';
 
 module.exports = function initSecurityBot(app, io) {
 
+if (!TOKEN) {
+    console.warn("⚠️ SECURITY_TOKEN manquant ! Le module de sécurité et le dashboard ne se connecteront pas à Discord.");
+    return { logToDashboard: () => {} };
+}
+
 function getLogs(path) {
     if (!fs.existsSync(path)) return [];
     try {
