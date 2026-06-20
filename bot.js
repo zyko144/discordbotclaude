@@ -532,6 +532,59 @@ client.on('messageCreate', async (message) => {
           return message.reply("✅ L'historique local a été vidé. Mais ❌ impossible de supprimer les invitations Discord (vérifie ma permission *Gérer le serveur*).");
       }
   }
+
+  if (message.content.startsWith('!kickdc') && message.member && message.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      const usersArray = Array.from(message.mentions.users.values());
+      if (usersArray.length < 2) return message.reply("❌ Syntaxe incorrecte. Utilisation : `!kickdc <@DoubleCompte> <@ComptePrincipal>`");
+      
+      const dcUser = usersArray[0];
+      const mainUser = usersArray[1];
+
+      // 1. Kick the DC
+      const dcMember = message.guild.members.cache.get(dcUser.id);
+      if (dcMember) await dcMember.kick("Double Compte identifié (Triche Giveaway)").catch(()=>{});
+
+      // 2. Warn the main account
+      await message.channel.send(`⚠️ **AVERTISSEMENT SÉCURITÉ** : <@${mainUser.id}> a été surpris en train d'inviter un Double Compte (\`${dcUser.username}\`) pour tricher au Giveaway.\nLe faux compte a été expulsé du serveur, et le compte principal a été banni du Giveaway en cours.`);
+
+      // 3. Remove main account from giveaway
+      let found = false;
+      for (const ch of message.guild.channels.cache.values()) {
+          if (!ch.isTextBased()) continue;
+          try {
+              const messages = await ch.messages.fetch({ limit: 30 });
+              for (const msg of messages.values()) {
+                  if (msg.components && msg.components.length > 0 && msg.components[0].components.length > 0 && msg.components[0].components[0].customId === 'join_giveaway') {
+                      if (!client.giveaways) client.giveaways = {};
+                      let participants = client.giveaways[msg.id] || [];
+                      
+                      const embed = require('discord.js').EmbedBuilder.from(msg.embeds[0]);
+                      let desc = embed.data.description || "";
+                      const baseDescIndex = desc.indexOf('**👥 Participants');
+                      
+                      if (baseDescIndex !== -1) {
+                          if (participants.length === 0) {
+                              const matches = desc.match(/<@(\d+)>/g);
+                              if (matches) participants = matches.map(m => m.replace('<@', '').replace('>', ''));
+                          }
+                          participants = participants.filter(id => id !== mainUser.id);
+                          client.giveaways[msg.id] = participants;
+                          
+                          let participantList = participants.map(id => `<@${id}>`).join(', ');
+                          if (participantList.length > 1000) participantList = participantList.substring(0, 1000) + '... et bien d\'autres !';
+                          
+                          const baseDesc = desc.substring(0, baseDescIndex);
+                          embed.setDescription(`${baseDesc}**👥 Participants (${participants.length}) :**\n${participantList}\n\n*(Nettoyage auto : seuls les membres ayant invité au moins 1 personne sont autorisés. ⚠️ Les Doubles Comptes (DC) = BAN DIRECT !)*`);
+                          await msg.edit({ embeds: [embed] }).catch(()=>{});
+                          found = true;
+                      }
+                  }
+              }
+          } catch(e){}
+      }
+      return;
+  }
+
   if (message.author.bot) return;
 
   // --- BRIDGE TO SECURITY BOT ---
@@ -1073,6 +1126,19 @@ client.on('guildMemberAdd', async member => {
     }
     
     if (usedInvite && usedInvite.inviter) {
+       // --- ANTI-DC SECURITY SCANNER ---
+       try {
+           const newName = member.user.username.toLowerCase().replace(/[^a-z0-9]/g, '');
+           const inviterName = usedInvite.inviter.username.toLowerCase().replace(/[^a-z0-9]/g, '');
+           
+           if (newName.length > 3 && inviterName.length > 3 && (newName.includes(inviterName) || inviterName.includes(newName))) {
+               const alertChannel = member.guild.channels.cache.find(c => c.name.toLowerCase().includes('admin') || c.name.toLowerCase().includes('log'));
+               if (alertChannel) {
+                   await alertChannel.send(`🚨 **ALERTE SÉCURITÉ ANTI-DC** 🚨\nUn compte suspect (\`${member.user.username}\`) vient de rejoindre via l'invitation de <@${usedInvite.inviter.id}> (\`${usedInvite.inviter.username}\`).\nLeurs pseudos sont **quasiment identiques** (Tricherie détectée pour le Giveaway) !\n\n*Action recommandée : Copiez/collez cette commande pour nettoyer automatiquement :*\n\`!kickdc <@${member.user.id}> <@${usedInvite.inviter.id}>\``);
+               }
+           }
+       } catch(e) {}
+
        const dbPath = './database.json';
        if (fs.existsSync(dbPath)) {
           const db = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
