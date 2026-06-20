@@ -56,7 +56,7 @@ const activeTicketCreations = new Set(); // Prevent double-click ticket race con
 const app = express();
 app.get('/', (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-  res.sendFile(require('path').resolve('./dashboard.html'));
+  res.sendFile(require('path').join(__dirname, 'dashboard.html'));
 });
 
 app.get('/api/invites', async (req, res) => {
