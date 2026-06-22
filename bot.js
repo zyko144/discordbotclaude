@@ -204,6 +204,26 @@ client.once('ready', async () => {
     console.error("Impossible de configurer la permission d'invitation pour @everyone:", err);
   }
   
+  // Créer ou récupérer une invitation permanente
+  try {
+    const guild = client.guilds.cache.first();
+    if (guild) {
+      const invites = await guild.invites.fetch();
+      let permanentInvite = invites.find(i => i.maxAge === 0);
+      if (!permanentInvite) {
+        const inviteChannel = guild.systemChannel || guild.channels.cache.find(c => c.isTextBased() && c.permissionsFor(guild.members.me).has(PermissionFlagsBits.CreateInstantInvite));
+        if (inviteChannel) {
+          permanentInvite = await inviteChannel.createInvite({ maxAge: 0, maxUses: 0 });
+          console.log(`🔗 NOUVEAU LIEN D'INVITATION PUBLIC GÉNÉRÉ : ${permanentInvite.url}`);
+        }
+      } else {
+        console.log(`🔗 LIEN D'INVITATION PUBLIC PERMANENT : ${permanentInvite.url}`);
+      }
+    }
+  } catch (err) {
+    console.error("Erreur gestion lien d'invitation:", err);
+  }
+  
   // Cache invites for all guilds
   for (const [id, g] of client.guilds.cache) {
     try {
@@ -363,30 +383,42 @@ client.once('ready', async () => {
         let db = {};
         if (fs.existsSync(dbPath)) db = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
         
-        if (latest.title !== db.lastNewsTitle) {
+        const guild = client.guilds.cache.first();
+        if (!guild) return;
+        let newsChannel = guild.channels.cache.find(c => c.name.toLowerCase().includes('actualit') && c.type === ChannelType.GuildText);
+        
+        if (!newsChannel) {
+          try {
+            newsChannel = await guild.channels.create({
+              name: 'actualités-ia',
+              type: ChannelType.GuildText,
+              permissionOverwrites: [
+                {
+                  id: guild.id,
+                  deny: [PermissionFlagsBits.SendMessages],
+                }
+              ]
+            });
+          } catch (err) {
+            console.error('Impossible de créer le salon actualités:', err);
+          }
+        }
+
+        // Vérifier le dernier message posté pour éviter les doublons après redémarrage
+        let alreadyPosted = false;
+        if (newsChannel) {
+            const lastMessages = await newsChannel.messages.fetch({ limit: 5 }).catch(() => new Map());
+            for (const msg of lastMessages.values()) {
+                if (msg.embeds.length > 0 && msg.embeds[0].title === '📰 ' + latest.title) {
+                    alreadyPosted = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!alreadyPosted && latest.title !== db.lastNewsTitle) {
           db.lastNewsTitle = latest.title;
           fs.writeFileSync(dbPath, JSON.stringify(db, null, 2));
-          
-          const guild = client.guilds.cache.first();
-          if (!guild) return;
-          let newsChannel = guild.channels.cache.find(c => c.name.toLowerCase().includes('actualit') && c.type === ChannelType.GuildText);
-          
-          if (!newsChannel) {
-            try {
-              newsChannel = await guild.channels.create({
-                name: 'actualités-ia',
-                type: ChannelType.GuildText,
-                permissionOverwrites: [
-                  {
-                    id: guild.id,
-                    deny: [PermissionFlagsBits.SendMessages],
-                  }
-                ]
-              });
-            } catch (err) {
-              console.error('Impossible de créer le salon actualités:', err);
-            }
-          }
           
           if (newsChannel) {
             const embed = new EmbedBuilder()
@@ -873,15 +905,77 @@ client.on('interactionCreate', async interaction => {
     try {
       await commandMod.execute(interaction);
     } catch (error) {
-      console.error(error);
-      if(interaction.replied || interaction.deferred) {
-          await interaction.followUp({ content: '❌ Erreur lors de l\'exécution de la commande.', ephemeral: true });
-      } else {
-          await interaction.reply({ content: '❌ Erreur lors de l\'exécution de la commande.', ephemeral: true });
+      console.error("Erreur commande :", error);
+      try {
+        if(interaction.replied || interaction.deferred) {
+            await interaction.followUp({ content: '❌ Erreur lors de l\'exécution de la commande.', ephemeral: true });
+        } else {
+            await interaction.reply({ content: '❌ Erreur lors de l\'exécution de la commande.', ephemeral: true });
+        }
+      } catch (innerError) {
+        console.error("Impossible de répondre à l'interaction échouée :", innerError.message);
       }
     }
   }
-  
+  // Modal Submit handler
+  if (interaction.isModalSubmit()) {
+    if (interaction.customId === 'giveaway_modal') {
+      await interaction.deferReply({ ephemeral: true });
+      const prize = interaction.fields.getTextInputValue('giveaway_prize');
+      const timeInMinutes = parseInt(interaction.fields.getTextInputValue('giveaway_time')) || 60;
+      const condition = interaction.fields.getTextInputValue('giveaway_condition');
+      const link = interaction.fields.getTextInputValue('giveaway_link');
+      
+      const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require('discord.js');
+      const banner = new AttachmentBuilder('./shop_giveaway_banner.png');
+      
+      const embed = new EmbedBuilder()
+        .setColor(0xCF6B45)
+        .setTitle('🎁 NOUVEAU GIVEAWAY EXCLUSIF 🎁')
+        .setDescription(`Un nouveau concours vient d'être lancé ! Participez maintenant pour tenter de remporter la récompense.\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🏆 **Lot à gagner :** ${prize}\n\n⚠️ **Condition Obligatoire :** ${condition}\n🔗 **Lien du serveur :** ${link}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n👇 Cliquez sur le bouton "Participer" ci-dessous !\n\n⏱️ **Tirage dans :** ${timeInMinutes} minute(s)\n\n**👥 Participants (0) :**\n*(Soyez le premier à participer !)*`)
+        .setImage('attachment://shop_giveaway_banner.png')
+        .setTimestamp(Date.now() + timeInMinutes * 60000);
+        
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('join_giveaway').setLabel('🎉 Participer').setStyle(ButtonStyle.Primary)
+      );
+      
+      const giveawayMsg = await interaction.channel.send({ embeds: [embed], components: [row], files: [banner] });
+      await interaction.editReply({ content: '✅ Giveaway lancé avec succès !' });
+      
+      if (!client.giveaways) client.giveaways = {};
+      client.giveaways[giveawayMsg.id] = [];
+      
+      setTimeout(async () => {
+        try {
+          const fetchedMsg = await interaction.channel.messages.fetch(giveawayMsg.id);
+          const participants = client.giveaways[giveawayMsg.id] || [];
+          
+          if (participants.length === 0) {
+            await interaction.channel.send(`🎉 Le giveaway pour **${prize}** est terminé, mais personne n'a participé...`);
+            return;
+          }
+          
+          const validParticipants = participants.filter(id => id !== interaction.user.id);
+          const finalPool = validParticipants.length > 0 ? validParticipants : participants;
+          const winner = finalPool[Math.floor(Math.random() * finalPool.length)];
+          
+          await interaction.channel.send(`🎉 Félicitations <@${winner}> ! Tu as gagné le giveaway pour : **${prize}** !`);
+          
+          const endEmbed = EmbedBuilder.from(fetchedMsg.embeds[0])
+            .setTitle('🎉 GIVEAWAY TERMINÉ 🎉')
+            .setDescription(`**Lot remporté :** ${prize}\n**Gagnant :** <@${winner}>`)
+            .setColor(0x2B2D31);
+          
+          await fetchedMsg.edit({ embeds: [endEmbed], components: [] }).catch(() => {});
+          delete client.giveaways[giveawayMsg.id];
+        } catch (e) {
+          console.error('Erreur Giveaway', e);
+        }
+      }, timeInMinutes * 60000);
+    }
+  }
+
   // Buttons handler (Tickets, Verification, Giveaways)
   if (interaction.isButton()) {
     try {
@@ -912,22 +1006,26 @@ client.on('interactionCreate', async interaction => {
           }
         }
         
-        // VÉRIFICATION DES INVITATIONS OBLIGATOIRE
-        let hasInvited = false;
+        // VÉRIFICATION DU SERVEUR REQUIS (1518644557141643424)
+        const requiredGuildId = '1518644557141643424';
+        let isMemberOfRequiredGuild = false;
         try {
-            const invites = await interaction.guild.invites.fetch();
-            invites.forEach(inv => {
-              if (inv.inviter && inv.inviter.id === interaction.user.id && inv.uses > 0) {
-                hasInvited = true;
-              }
-            });
+            // Le bot doit absolument être sur ce serveur pour que ça fonctionne
+            const requiredGuild = await client.guilds.fetch(requiredGuildId);
+            if (requiredGuild) {
+                // Tente de récupérer le membre sur l'autre serveur
+                const member = await requiredGuild.members.fetch(interaction.user.id).catch(() => null);
+                if (member) {
+                    isMemberOfRequiredGuild = true;
+                }
+            }
         } catch (error) {
-            console.error("Impossible de fetch les invitations pour le giveaway:", error);
-            return interaction.reply({ content: '❌ **Erreur :** Impossible de vérifier tes invitations. Le propriétaire du serveur doit donner la permission **"Gérer le serveur"** au bot pour que les Giveaways fonctionnent !', ephemeral: true });
+            console.error("Erreur serveur requis :", error);
+            return interaction.reply({ content: '❌ **Erreur :** Le bot n\'arrive pas à vérifier ta présence sur l\'autre serveur. Assure-toi que le bot a bien été ajouté sur le serveur requis !', ephemeral: true });
         }
 
-        if (!hasInvited) {
-          return interaction.reply({ content: '❌ **Accès refusé :** Tu dois inviter au moins **1 ami** sur le serveur (via ton propre lien) pour participer au giveaway !\n\n⚠️ **ATTENTION : La création de Doubles Comptes (DC) pour tricher entraîne un BANNISSEMENT DÉFINITIF immédiat par la sécurité.**', ephemeral: true });
+        if (!isMemberOfRequiredGuild) {
+          return interaction.reply({ content: '❌ **Accès refusé :** Tu dois absolument rejoindre le serveur partenaire pour participer à ce giveaway !\n\n⚠️ **ATTENTION : La création de Doubles Comptes (DC) pour tricher entraîne un BANNISSEMENT DÉFINITIF immédiat par la sécurité.**', ephemeral: true });
         }
 
         const participants = client.giveaways[interaction.message.id];
@@ -944,7 +1042,7 @@ client.on('interactionCreate', async interaction => {
              if (participantList.length > 1000) {
                  participantList = participantList.substring(0, 1000) + '... et bien d\'autres !';
              }
-             embed.setDescription(`${baseDesc}**👥 Participants (${participants.length}) :**\n${participantList}\n\n*(Nettoyage auto : seuls les membres ayant invité au moins 1 personne sont autorisés. ⚠️ Les Doubles Comptes (DC) = BAN DIRECT !)*`);
+             embed.setDescription(`${baseDesc}**👥 Participants (${participants.length}) :**\n${participantList}\n\n*(Nettoyage auto : seuls les membres du serveur partenaire sont autorisés. ⚠️ Les Doubles Comptes (DC) = BAN DIRECT !)*`);
              await interaction.message.edit({ embeds: [embed] });
           }
 

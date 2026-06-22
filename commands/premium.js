@@ -62,10 +62,8 @@ module.exports = [
 
     
   new SlashCommandBuilder().setName('giveaway')
-    .setDescription('Lance un tirage au sort')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .addIntegerOption(opt => opt.setName('temps').setDescription('Temps en minutes').setRequired(true))
-    .addStringOption(opt => opt.setName('lot').setDescription('Le lot à gagner').setRequired(true)),
+    .setDescription('Ouvre le formulaire pour créer un giveaway')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     
   new SlashCommandBuilder().setName('endgiveaway')
     .setDescription('Termine manuellement un giveaway et tire un gagnant')
@@ -171,56 +169,46 @@ module.exports.execute = async (interaction) => {
   }
 
   if (commandName === 'giveaway') {
-    await interaction.deferReply({ ephemeral: true });
-    const timeInMinutes = options.getInteger('temps');
-    const prize = options.getString('lot');
-    
-    const banner = new AttachmentBuilder('./giveaway_banner.png');
-    
-    const embed = new EmbedBuilder()
-      .setColor(0xCF6B45)
-      .setTitle('🎉 NOUVEAU GIVEAWAY 🎉')
-      .setDescription(`**Lot à gagner :** ${prize}\n\n**⚠️ Condition Obligatoire :** Invitez 1 ami sur le serveur pour être éligible au tirage !\n\nCliquez sur le bouton ci-dessous pour participer !\n\n**Tirage dans :** ${timeInMinutes} minute(s)\n\n**👥 Participants (0) :**\n*(Soyez le premier à participer !)*`)
-      .setImage('attachment://giveaway_banner.png')
-      .setTimestamp(Date.now() + timeInMinutes * 60000);
-      
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('join_giveaway').setLabel('🎉 Participer').setStyle(ButtonStyle.Primary)
+    const modal = new ModalBuilder()
+      .setCustomId('giveaway_modal')
+      .setTitle('Créer un Giveaway Exclusif');
+
+    const prizeInput = new TextInputBuilder()
+      .setCustomId('giveaway_prize')
+      .setLabel('Lot à gagner')
+      .setPlaceholder('Ex: Nitro 1 Mois, Compte Netflix...')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+
+    const timeInput = new TextInputBuilder()
+      .setCustomId('giveaway_time')
+      .setLabel('Temps en minutes')
+      .setPlaceholder('Ex: 60')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+
+    const conditionInput = new TextInputBuilder()
+      .setCustomId('giveaway_condition')
+      .setLabel('Condition Obligatoire')
+      .setPlaceholder('Ex: Rejoindre le serveur partenaire')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+
+    const linkInput = new TextInputBuilder()
+      .setCustomId('giveaway_link')
+      .setLabel('Lien du serveur partenaire')
+      .setPlaceholder('Ex: https://discord.gg/XXX')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(prizeInput),
+      new ActionRowBuilder().addComponents(timeInput),
+      new ActionRowBuilder().addComponents(conditionInput),
+      new ActionRowBuilder().addComponents(linkInput)
     );
-    
-    const giveawayMsg = await interaction.channel.send({ embeds: [embed], components: [row], files: [banner] });
-    await interaction.editReply({ content: '✅ Giveaway lancé.' });
-    
-    if (!client.giveaways) client.giveaways = {};
-    client.giveaways[giveawayMsg.id] = [];
-    
-    setTimeout(async () => {
-      try {
-        const fetchedMsg = await interaction.channel.messages.fetch(giveawayMsg.id);
-        const participants = client.giveaways[giveawayMsg.id] || [];
-        
-        if (participants.length === 0) {
-          await interaction.channel.send(`🎉 Le giveaway pour **${prize}** est terminé, mais personne n'a participé...`);
-          return;
-        }
-        
-        const validParticipants = participants.filter(id => id !== interaction.user.id);
-        const finalPool = validParticipants.length > 0 ? validParticipants : participants;
-        const winner = finalPool[Math.floor(Math.random() * finalPool.length)];
-        
-        await interaction.channel.send(`🎉 Félicitations <@${winner}> ! Tu as gagné le giveaway pour : **${prize}** !`);
-        
-        const endEmbed = EmbedBuilder.from(fetchedMsg.embeds[0])
-          .setTitle('🎉 GIVEAWAY TERMINÉ 🎉')
-          .setDescription(`**Lot remporté :** ${prize}\n**Gagnant :** <@${winner}>`)
-          .setColor(0x2B2D31);
-        
-        await fetchedMsg.edit({ embeds: [endEmbed], components: [] }).catch(() => {});
-        delete client.giveaways[giveawayMsg.id];
-      } catch (e) {
-        console.error('Erreur Giveaway', e);
-      }
-    }, timeInMinutes * 60000);
+
+    await interaction.showModal(modal);
   }
 
   if (commandName === 'endgiveaway' || commandName === 'reroll') {
@@ -230,20 +218,19 @@ module.exports.execute = async (interaction) => {
       const fetchedMsg = await interaction.channel.messages.fetch(msgId);
       let participants = (client.giveaways && client.giveaways[msgId]) ? client.giveaways[msgId] : [];
       
-      // Fallback ou Reroll : on cherche tous les membres éligibles (>= 1 invite)
-      if (participants.length === 0 || commandName === 'reroll') {
-        const invites = await interaction.guild.invites.fetch();
-        const eligibleUsers = new Set();
-        invites.forEach(inv => {
-            if(inv.inviter && !inv.inviter.bot && inv.uses > 0) {
-                eligibleUsers.add(inv.inviter.id);
-            }
-        });
-        participants = Array.from(eligibleUsers);
+      // Fallback : si le bot a redémarré, on récupère les participants depuis la description du message
+      if (participants.length === 0) {
+        const existingEmbed = fetchedMsg.embeds[0];
+        if (existingEmbed && existingEmbed.description) {
+          const matches = existingEmbed.description.match(/<@(\d+)>/g);
+          if (matches) {
+            participants = [...new Set(matches.map(m => m.replace('<@', '').replace('>', '')))];
+          }
+        }
       }
 
       if (participants.length === 0) {
-        await interaction.editReply({ content: '❌ Personne n\'est éligible (0 membre avec au moins 1 invitation).' });
+        await interaction.editReply({ content: '❌ Impossible de procéder au tirage : Aucun participant trouvé.' });
         return;
       }
 
